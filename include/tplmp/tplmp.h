@@ -640,4 +640,4 @@ struct pmemb_type<_Class, _RetType (*)(_ArgTypes...)>
 
 }
 
-#endif//_TPLMP_TPLMP
+#endif //_TPLMP_TPLMP
