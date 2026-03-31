@@ -3,13 +3,6 @@
 
 namespace tplmp
 {
-/**
- * @brief 使编译器在错误信息中打印_Ts...参数包的实际推导类型
- */
-template<typename ...>
-struct __deduced_type_list__
-{
-};
 
 template<bool _AssertCond, typename ..._Ts>
 struct __ce_print_types_t
@@ -24,8 +17,22 @@ struct __ce_print_types_t<true, _Ts...>
 template<typename ..._Ts>
 struct __ce_print_types_t<false, _Ts...>
 {
-	typedef typename __deduced_type_list__<_Ts...>::see_the_following_list _;
+private:
+	/**
+	 * @brief 使编译器在错误信息中打印_Ts...参数包的实际推导类型
+	 */
+	template<typename ...>
+	struct __deduced_type_list
+	{
+	};
+
+public:
+	typedef typename __deduced_type_list<_Ts...>::see_the_following_list _;
 };
+
+#define assert_class(class_name) static_assert(tplmp::is_class<class_name>::value, "'" #class_name "' must be class type")
+
+#define assert_classification(classification1, classification2) static_assert(classification1 == classification2, "classification not match: '" #classification1 "' and '" #classification2 "'")
 
 /**
  * @brief 断言_AssertCond，断言失败则在错误信息中打印后面传入的全部类型
@@ -103,6 +110,13 @@ struct decl<_RetType(_ArgTypes...)> : __decl_impl<_RetType (*)(_ArgTypes...)>
 {
 	using __decl_impl<_RetType (*)(_ArgTypes...)>::type;
 };
+
+/**
+ * @brief 返回目标表达式的类型
+ * 		  用法例如typedef decltype(type_of_expr(x)) x_type;
+ */
+template<typename _T>
+constexpr _T type_of_expr(_T) noexcept;
 
 /**
  * @brief 对目标表达式进行求值返回结果
@@ -329,7 +343,7 @@ public:
 
 enum type_classification : int
 {
-	VALUE, //普通值
+	VARIABLE, //普通变量
 	FUNCTION, //普通函数
 	MEMB_FIELD, //成员字段
 	MEMB_FUNCTION, //成员函数
@@ -351,17 +365,23 @@ struct parameters_at: __parameters_at_impl<_Index, _Params...>
 };
 
 /**
- * @brief 参数包，用于保存模板参数而不展开，对于非类型参数，使用constexpr_value<>封装
+ * @brief 类型参数包，用于保存模板参数而不展开，对于非类型参数，使用constexpr_value<>封装
  */
 template<typename ..._Params>
 struct parameters_pack
 {
+	/**
+	 * @brief 参数包长度
+	 */
+	static const int size = sizeof...(_Params);
+
 	/**
 	 * @brief 将参数包用作函数参数并获取函数指针的类型
 	 */
 	template<typename _RetType>
 	struct as_func_args
 	{
+		typedef void decl_class;
 		typedef _RetType (*func_type)(_Params ...);
 		typedef _RetType return_type;
 	};
@@ -372,10 +392,14 @@ struct parameters_pack
 	template<typename _Class, typename _RetType>
 	struct as_memb_func_args
 	{
+		typedef _Class decl_class;
 		typedef _RetType (_Class::*func_type)(_Params ...);
 		typedef _RetType return_type;
 	};
 
+	/**
+	 * @brief 指定索引的类型
+	 */
 	template<int _Index>
 	struct at
 	{
@@ -402,34 +426,58 @@ struct parameters_pack_at<_Index, parameters_pack<_Params...> >
  * @brief 值的种类判断
  */
 template<typename _T>
-struct type_classification_of
+struct type_classification_of_t
 {
-	static const type_classification value = type_classification::VALUE;
+	static const type_classification value = type_classification::VARIABLE;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
-struct type_classification_of<_RetType(_ArgTypes...)>
+struct type_classification_of_t<_RetType(_ArgTypes...)>
 {
 	static const type_classification value = type_classification::FUNCTION;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
-struct type_classification_of<_RetType (*)(_ArgTypes...)>
+struct type_classification_of_t<_RetType (*)(_ArgTypes...)>
 {
 	static const type_classification value = type_classification::FUNCTION;
 };
 
 template<typename _Class, typename _T>
-struct type_classification_of<_T _Class::*>
+struct type_classification_of_t<_T _Class::*>
 {
 	static const type_classification value = type_classification::MEMB_FIELD;
 };
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
-struct type_classification_of<_RetType (_Class::*)(_ArgTypes...)>
+struct type_classification_of_t<_RetType (_Class::*)(_ArgTypes...)>
 {
 	static const type_classification value = type_classification::MEMB_FUNCTION;
 };
+
+template<typename _T>
+inline constexpr type_classification type_classification_of(_T*)
+{
+	return type_classification::VARIABLE;
+}
+
+template<typename _RetType, typename ... _ArgTypes>
+inline constexpr type_classification type_classification_of(_RetType (*)(_ArgTypes...))
+{
+	return type_classification::FUNCTION;
+}
+
+template<typename _Class, typename _T>
+inline constexpr type_classification type_classification_of(_T _Class::*)
+{
+	return type_classification::MEMB_FIELD;
+}
+
+template<typename _Class, typename _RetType, typename ... _ArgTypes>
+inline constexpr type_classification type_classification_of(_RetType (_Class::*)(_ArgTypes...))
+{
+	return type_classification::MEMB_FUNCTION;
+}
 
 /**
  * @brief 将常量值转换成类型
@@ -437,7 +485,7 @@ struct type_classification_of<_RetType (_Class::*)(_ArgTypes...)>
 template<typename _T, _T _Value>
 struct constexpr_value
 {
-	static const type_classification classification = type_classification_of<_T>::result;
+	static const type_classification classification = type_classification_of_t<_T>::result;
 
 	typedef _T type;
 	static constexpr type value = _Value;
@@ -582,12 +630,12 @@ __define_primitive_type__(void)
 #undef __define_primitive_type__
 
 /**
- * @brief 判断T是否是类，结果实际上为!(is_primitive_type<_T>)
+ * @brief 判断T是否是类
  */
 template<typename _T>
 struct is_class
 {
-	static const bool value = !is_primitive<_T>::value;
+	static const bool value = !is_primitive<_T>::value && !is_ptr<_T>::value;
 };
 
 /**
@@ -620,16 +668,6 @@ struct pmemb_type
 
 template<typename _Class, typename _RetType, typename ..._ArgTypes>
 struct pmemb_type<_Class, _RetType(_ArgTypes...)>
-{
-	static const type_classification classification = type_classification::MEMB_FUNCTION;
-	typedef _RetType (_Class::*type)(_ArgTypes...);
-
-	typedef _RetType return_type;
-	typedef parameters_pack<_ArgTypes...> args_type;
-};
-
-template<typename _Class, typename _RetType, typename ..._ArgTypes>
-struct pmemb_type<_Class, _RetType (*)(_ArgTypes...)>
 {
 	static const type_classification classification = type_classification::MEMB_FUNCTION;
 	typedef _RetType (_Class::*type)(_ArgTypes...);
