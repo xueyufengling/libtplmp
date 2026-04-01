@@ -10,11 +10,6 @@ struct __ce_print_types_t
 };
 
 template<typename ..._Ts>
-struct __ce_print_types_t<true, _Ts...>
-{
-};
-
-template<typename ..._Ts>
 struct __ce_print_types_t<false, _Ts...>
 {
 private:
@@ -30,14 +25,24 @@ public:
 	typedef typename __deduced_type_list<_Ts...>::see_the_following_list _;
 };
 
-#define assert_class(class_name) static_assert(tplmp::is_class<class_name>::value, "'" #class_name "' must be class type")
-
-#define assert_classification(classification1, classification2) static_assert(classification1 == classification2, "classification not match: '" #classification1 "' and '" #classification2 "'")
-
 /**
  * @brief 断言_AssertCond，断言失败则在错误信息中打印后面传入的全部类型
  */
-#define __ce_print_types(_AssertCond, ...) template class __ce_print_types_t<_AssertCond, ##__VA_ARGS__>
+#define __ce_print_types__(_AssertCond, ...) template class tplmp::__ce_print_types_t<_AssertCond, ##__VA_ARGS__>
+
+#define __assert_is_class__(class_name) static_assert(tplmp::is_class<class_name>::value, "'" #class_name "' must be class type")
+
+#define __assert_classification_equal__(classification1, classification2) static_assert(classification1 == classification2, "classification '" #classification1 "' and '" #classification2 "' not match")
+
+#define __assert_pack_size_equal__(pack1, pack2) static_assert(sizeof...(pack1) == sizeof...(pack2), "pack size of '" #pack1 "' and '" #pack2 "' not match")
+
+#define __assert_index__(index, length) static_assert(index >=0 && index < length, "index '" #index "' is out of length '" #length "'")
+
+#define __assert_pack_index__(index, pack) static_assert(index >=0 && index < sizeof...(pack), "index '" #index "' is out of pack '" #pack "'")
+
+#define __assert_type_equal__(type1, type2) static_assert(tplmp::type_equal<type1, type2>::value, "type '" #type1 "' and '" #type2 "' not match")
+
+#define __assert_not_impl__(type_or_value) static_assert(false, "specialization of '" #type_or_value "' not implemented")
 
 /**
  * @brief 左值强制类型转换
@@ -53,6 +58,36 @@ __attribute__((always_inline)) inline constexpr _T1& cast(_T2&& rv)
 {
 	return *(_T1*)(&(const _T2&)rv);
 }
+
+/**
+ * @brief 将常量值打包成类型。
+ * 		  模板元编程的一等公民。
+ */
+template<typename _T, _T _Value>
+struct _constexpr
+{
+	typedef _T type;
+	static constexpr type value = _Value;
+};
+
+#define __constexpr__(value) tplmp::_constexpr<decltype(value), value>
+
+/**
+ * @brief 判断目标是否是_constexpr<>
+ */
+template<typename _Constexpr>
+struct is_constexpr
+{
+	typedef void type;
+	static constexpr bool value = false;
+};
+
+template<typename _T, _T _Value>
+struct is_constexpr<_constexpr<_T, _Value>>
+{
+	typedef typename _constexpr<_T, _Value>::type type;
+	static constexpr bool value = true;
+};
 
 /**
  * @brief 判断两个类型是否相同
@@ -73,42 +108,47 @@ struct type_equal<_T, _T>
  * @brief 声明变量，val()、ref()、x()函数只有声明没有定义，只能在decltype()表达式中使用
  * 		  placeholder()返回值可以用于作为参数传递协助类型推导，但不能访问
  */
-template<typename _T>
-struct __decl_impl
+struct __decl_impl_base
 {
-public:
-	typedef _T type;
-
-	static constexpr type val() noexcept;
-
-	static constexpr type&& x() noexcept;
-
-	inline static constexpr type* ptr() noexcept
+protected:
+	template<typename _T>
+	struct __decl_impl
 	{
-		return nullptr;
-	}
+	public:
+		typedef _T type;
 
-	/**
-	 * @brief 返回一个占位符值，可以赋值、传值，但不能访问
-	 * 		  此函数不是constexpr，编译时如果对nullptr解引用会抛出编译错误。但此函数仍可在编译时在给static const变量赋值表达式中使用
-	 */
-	static type& ref() noexcept
-	{
-		static type* _nullptr = ptr();
-		return *_nullptr;
-	}
+		static constexpr type val() noexcept;
+
+		static constexpr type&& x() noexcept;
+
+		inline static constexpr type* ptr() noexcept
+		{
+			return nullptr;
+		}
+
+		/**
+		 * @brief 返回一个占位符值，可以赋值、传值，但不能访问
+		 * 		  此函数不是constexpr，编译时如果对nullptr解引用会抛出编译错误。但此函数仍可在编译时在给static const变量赋值表达式中使用
+		 */
+		static type& ref() noexcept
+		{
+			static type* _nullptr = ptr();
+			return *_nullptr;
+		}
+	};
 };
 
 template<typename _T>
-struct decl: __decl_impl<_T>
+struct decl: __decl_impl_base
 {
-	using __decl_impl<_T>::type;
+	typedef typename __decl_impl<_T>::type type;
 };
 
+// 函数类型的特化，函数类型是不可被声明的，只有函数指针可以声明，这里将函数类型转换为函数指针
 template<typename _RetType, typename ... _ArgTypes>
-struct decl<_RetType(_ArgTypes...)> : __decl_impl<_RetType (*)(_ArgTypes...)>
+struct decl<_RetType(_ArgTypes...)> : __decl_impl_base
 {
-	using __decl_impl<_RetType (*)(_ArgTypes...)>::type;
+	typedef typename __decl_impl<_RetType (*)(_ArgTypes...)>::type type;
 };
 
 /**
@@ -146,13 +186,13 @@ struct eval_type
  * @brief 条件判断和相关功能
  */
 template<bool _Cond>
-struct _if
+struct if_else
 {
-	static_assert(false, "not all possible implementions found for _if<bool _Cond>");
+	__assert_not_impl__(_Cond);
 };
 
 template<>
-struct _if<true>
+struct if_else<true>
 {
 	static const bool value = true;
 
@@ -160,10 +200,17 @@ struct _if<true>
 	 * @brief 可用于选择性实例化类模板
 	 * 		  判断_Cond是否为true，如果是则type类型为_TrueType，否则为_FalseType
 	 */
-	template<typename _TrueType, typename _FalseType = _TrueType>
-	struct resolve
+	template<typename _TrueType, typename _FalseType>
+	struct resolve_t
 	{
 		typedef _TrueType type;
+	};
+
+	template<typename _TrueType, _TrueType _TrueValue, typename _FalseType, _FalseType _FalseValue>
+	struct resolve_t<_constexpr<_TrueType, _TrueValue>, _constexpr<_FalseType, _FalseValue>>
+	{
+		typedef _TrueType type;
+		static const _TrueType value = _TrueValue;
 	};
 
 	template<typename _T>
@@ -172,13 +219,8 @@ struct _if<true>
 		typedef _T type;
 	};
 
-	template<typename _T>
-	struct disable
-	{
-	};
-
 	template<typename _TrueReturn, typename _FalseReturn>
-	__attribute__((always_inline)) inline static _TrueReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
+	__attribute__((always_inline)) inline static constexpr _TrueReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
 	{
 		return true_val;
 	}
@@ -194,14 +236,21 @@ struct _if<true>
 };
 
 template<>
-struct _if<false>
+struct if_else<false>
 {
 	static const bool value = false;
 
-	template<typename _TrueType, typename _FalseType = _TrueType>
-	struct resolve
+	template<typename _TrueType, typename _FalseType>
+	struct resolve_t
 	{
 		typedef _FalseType type;
+	};
+
+	template<typename _TrueType, _TrueType _TrueValue, typename _FalseType, _FalseType _FalseValue>
+	struct resolve_t<_constexpr<_TrueType, _TrueValue>, _constexpr<_FalseType, _FalseValue>>
+	{
+		typedef _FalseType type;
+		static const _FalseType value = _FalseValue;
 	};
 
 	template<typename _T>
@@ -209,14 +258,8 @@ struct _if<false>
 	{
 	};
 
-	template<typename _T>
-	struct disable
-	{
-		typedef _T type;
-	};
-
 	template<typename _TrueReturn, typename _FalseReturn>
-	__attribute__((always_inline)) inline static _FalseReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
+	__attribute__((always_inline)) inline static constexpr _FalseReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
 	{
 		return false_val;
 	}
@@ -229,11 +272,11 @@ struct _if<false>
 
 struct bool_type
 {
-	struct _true;
-	struct _false;
+	using _true = __constexpr__(true);
+	using _false = __constexpr__(false);
 
 	template<typename _T>
-	static constexpr bool bool_of(void)
+	inline static constexpr bool bool_of(void)
 	{
 		return type_equal<_T, _true>::value;
 	}
@@ -241,14 +284,18 @@ struct bool_type
 	template<bool _Value>
 	struct of
 	{
-		typedef typename _if<_Value>::resolve_type<_true, _false>::type type;
+		typedef typename if_else<_Value>
+		::resolve_t<
+				_true,
+				_false>
+		::type type;
 	};
 };
 
 /**
  * 得到表达式的bool_type返回类型对应的值，不会实际计算表达式，能避免一些编译错误
  */
-#define bool_of_expr(expr) bool_type::bool_of<decltype(expr)>()
+#define __bool_type_expr__(expr) tplmp::bool_type::bool_of<decltype(expr)>()
 
 /**
  * @brief 用作匹配具有非模板重载的重载模板函数的占位符。
@@ -338,89 +385,25 @@ public:
 	 * 非const对象，若可转换则__conversion_placeholder()返回类型为_Original，否则返回类型有两种候选：_Original、_Target，需要与非模板函数进一步匹配决议。
 	 * bool_of_expr()内部没有实际进行计算，不会抛出编译错误
 	 */
-	static const bool value = bool_of_expr(__check(__conversion_placeholder<_Target, _Original>(), int()));
+	static const bool value = __bool_type_expr__(__check(__conversion_placeholder<_Target, _Original>(), int()));
 };
 
+/**
+ * @brief 类型的分类，必定是以下之一
+ */
 enum type_classification : int
 {
 	VARIABLE, //普通变量
 	FUNCTION, //普通函数
-	MEMB_FIELD, //成员字段
+	ORID_NUM,
+	MEMB_FIELD = ORID_NUM, //成员字段
 	MEMB_FUNCTION, //成员函数
 };
 
-template<int _Index, typename _First, typename ... _Params>
-struct __parameters_at_impl
-{
-	typedef typename _if<_Index <= 0 || sizeof...(_Params) == 0>::resolve_type<_First, __parameters_at_impl <_Index - 1, _Params...> >::type type;
-};
-
-/**
- * @brief 获取指定索引的参数类型，索引从0开始，如果索引超出有效索引最小/最大范围，则取第一个/最后一个值
- */
-template<int _Index, typename ... _Params>
-struct parameters_at: __parameters_at_impl<_Index, _Params...>
-{
-	using __parameters_at_impl<_Index, _Params...>::type;
-};
-
-/**
- * @brief 类型参数包，用于保存模板参数而不展开，对于非类型参数，使用constexpr_value<>封装
- */
-template<typename ..._Params>
-struct parameters_pack
-{
-	/**
-	 * @brief 参数包长度
-	 */
-	static const int size = sizeof...(_Params);
-
-	/**
-	 * @brief 将参数包用作函数参数并获取函数指针的类型
-	 */
-	template<typename _RetType>
-	struct as_func_args
-	{
-		typedef void decl_class;
-		typedef _RetType (*func_type)(_Params ...);
-		typedef _RetType return_type;
-	};
-
-	/**
-	 * @brief 将参数包用作成员函数参数并获取成员函数指针的类型
-	 */
-	template<typename _Class, typename _RetType>
-	struct as_memb_func_args
-	{
-		typedef _Class decl_class;
-		typedef _RetType (_Class::*func_type)(_Params ...);
-		typedef _RetType return_type;
-	};
-
-	/**
-	 * @brief 指定索引的类型
-	 */
-	template<int _Index>
-	struct at
-	{
-		typedef typename parameters_at<_Index, _Params...>::type type;
-	};
-};
-
-template<int _Index, typename _ParamsPack>
-struct parameters_pack_at
-{
-	static_assert(false, "parameters_pack_at's template parameter '_ParamsPack' should be type parameters_pack<...>");
-};
-
-/**
- * @brief 从parameters_pack<...>参数包中提取某个索引的类型，_Params只接收parameters_pack<...>类型，其他类型将静态断言失败
- */
-template<int _Index, typename ... _Params>
-struct parameters_pack_at<_Index, parameters_pack<_Params...> >
-{
-	typedef typename parameters_at<_Index, _Params...>::type type;
-};
+using type_classification_variable_t = __constexpr__(type_classification::VARIABLE);
+using type_classification_function_t = __constexpr__(type_classification::FUNCTION);
+using type_classification_memb_field_t = __constexpr__(type_classification::MEMB_FIELD);
+using type_classification_memb_function_t = __constexpr__(type_classification::MEMB_FUNCTION);
 
 /**
  * @brief 值的种类判断
@@ -479,19 +462,232 @@ inline constexpr type_classification type_classification_of(_RetType (_Class::*)
 	return type_classification::MEMB_FUNCTION;
 }
 
-/**
- * @brief 将常量值转换成类型
- */
-template<typename _T, _T _Value>
-struct constexpr_value
+inline constexpr type_classification to_orid_classification(type_classification classification)
 {
-	static const type_classification classification = type_classification_of_t<_T>::result;
+	return classification > type_classification::ORID_NUM ? (type_classification)(classification - type_classification::ORID_NUM) : classification;
+}
 
-	typedef _T type;
-	static constexpr type value = _Value;
+inline constexpr type_classification to_memb_classification(type_classification classification)
+{
+	return classification < type_classification::ORID_NUM ? (type_classification)(classification + type_classification::ORID_NUM) : classification;
+}
+
+inline constexpr bool is_memb_classification(type_classification classification)
+{
+	return classification == type_classification::MEMB_FIELD || classification == type_classification::MEMB_FUNCTION;
+}
+
+// ***** 类型参数包 *****
+
+inline static constexpr bool is_index_valid(int idx, int length)
+{
+	return idx >= 0 && idx < length;
+}
+
+struct __type_at_impl_base //避免外部模板类的不同实例都实例化相同的__type_at_impl<>模板，又限制外部访问
+{
+protected:
+	struct __type_at_impl_oob //索引越界
+	{
+	private:
+		struct oob;
+
+	public:
+		typedef oob type; //无效索引
+	};
+
+	template<int _Index, typename _First, typename ... _RestParams>
+	struct __type_at_impl
+	{
+		typedef typename if_else<_Index <= 0>
+		::resolve_t<
+				_First,
+				typename __type_at_impl<_Index - 1, _RestParams...>::type
+		>::type type;
+	};
+
+	template<int _Index, typename _First>
+	struct __type_at_impl<_Index, _First> //迭代终止偏特化
+	{
+		typedef _First type;
+	};
 };
 
-#define constexpr_val(value) constexpr_value<decltype(value), value>
+/**
+ * @brief 获取指定索引的参数类型，索引从0开始
+ * 		  如果_Params为空则将断言失败，索引越界。
+ */
+template<int _Index, typename ... _Params>
+struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeof...(_Params))>
+		::resolve_t<
+				__type_at_impl_base:: __type_at_impl <_Index, _Params...>,
+				__type_at_impl_base:: __type_at_impl_oob
+				>::type
+{
+};
+
+/**
+ * @brief 类型参数包迭代器
+ */
+template<int _Index, typename ..._Params>
+struct iterator;
+
+struct __iterator_impl_base
+{
+protected:
+	// 超出索引且不是end迭代器的无效迭代器
+	struct __iterator_impl_oob
+	{
+		static const int index = -1;
+
+		typedef __iterator_impl_oob prev;
+		typedef __iterator_impl_oob next; //下一个还是本类
+
+		static const bool has_prev = false;
+		static const bool has_next = false;
+	};
+
+	template<int _Index, typename ..._Params>
+	struct __iterator_impl
+	{
+		static const int index = _Index;
+
+		__assert_pack_index__(index, _Params); //检查边界
+
+		typedef typename type_at<index, _Params...>::type type;
+
+		typedef iterator<index - 1, _Params...> prev; //上一个迭代器
+		typedef iterator<index + 1, _Params...> next; //下一个迭代器
+
+		static const bool has_prev = true;
+		static const bool has_next = true;
+	};
+
+	//最后一个元素之后的下一个迭代器，即end迭代器
+	template<typename ..._Params>
+	struct __iterator_impl<sizeof...(_Params), _Params...>
+	{
+		static const int index = sizeof...(_Params);
+
+		typedef iterator<index - 1, _Params...> prev; //上一个迭代器是最后一个元素
+		typedef __iterator_impl_oob next;
+
+		static const bool has_prev = sizeof...(_Params) == 0 ? false : true;
+		static const bool has_next = false;
+	};
+};
+
+template<int _Index, typename ..._Params>
+struct iterator: __iterator_impl_base, public if_else<_Index >= 0 && _Index <= sizeof...(_Params)>
+		::resolve_t<
+				__iterator_impl_base:: __iterator_impl <_Index, _Params...>,
+				__iterator_impl_base:: __iterator_impl_oob
+				>::type
+{
+};
+
+/**
+ * @brief 类型参数包，用于保存模板参数而不展开，对于值参数，需要使用_constexpr<>将值封装为类型
+ */
+template<typename ..._Params>
+struct type_pack
+{
+	/**
+	 * @brief 参数包长度
+	 */
+	static const int size = sizeof...(_Params);
+
+	/**
+	 * @brief 将参数包用作成员函数参数类型并获取成员函数指针的类型
+	 */
+	template<typename _Class, typename _RetType>
+	struct func_type
+	{
+		typedef _Class decl_class;
+		typedef _RetType (_Class::*type)(_Params ...);
+		typedef _RetType return_type;
+	};
+
+	/**
+	 * @brief 将参数包用作函数参数类型并获取函数指针的类型
+	 */
+	template<typename _RetType>
+	struct func_type<void, _RetType>
+	{
+		typedef void decl_class;
+		typedef _RetType (*type)(_Params ...);
+		typedef _RetType return_type;
+	};
+
+	/**
+	 * @brief 指定索引的类型
+	 */
+	template<int _Index>
+	struct at
+	{
+		typedef typename type_at<_Index, _Params...>::type type;
+	};
+
+	template<int _Index>
+	using iterator_at = iterator<_Index, _Params...>;
+
+	using begin = iterator_at<0>; //第一个元素的迭代器
+	using end = iterator_at<size>; //迭代递归终止，必须通过对迭代器参数类型偏特化为end来终止递归，否则将无限递归直到报错
+
+private:
+	template<typename _T, typename _Iter>
+	struct __first_index_of_impl
+	{
+		static const int value = if_else<type_equal<_T, typename _Iter::type>::value>
+				::_return(
+						_Iter::index, //类型相同则当前索引
+						__first_index_of_impl<_T, typename _Iter::next>::value //类型不同则继续迭代下一个元素
+						);
+	};
+
+	template<typename _T>
+	struct __first_index_of_impl<_T, end>
+	{
+		static const int value = -1; //迭代至最后一个元素返回-1
+	};
+
+public:
+	/**
+	 * @brief 获取指定类型第一次出现时的索引
+	 */
+	template<typename _T>
+	struct first_index_of
+	{
+		static const int value = size == 0 ? -1 : __first_index_of_impl<_T, begin>::value;
+	};
+};
+
+template<typename _Value>
+struct _switch
+{
+	template<typename ... _Cases>
+	struct _case
+	{
+		typedef type_pack<_Cases...> cases;
+
+		static const int value = cases::template first_index_of<_Value>::value;
+
+		template<typename _Default, typename ... _Results>
+		struct resolve_t
+		{
+			__assert_pack_size_equal__(_Cases, _Results);
+
+			typedef typename if_else<value == -1>
+			::resolve_t<
+					_Default,
+					typename type_at<
+							value,
+							_Results...
+					>::type
+			>::type type;
+		};
+	};
+};
 
 /**
  * @brief 变量或函数所属的类，如果不是成员则type为void
@@ -521,15 +717,6 @@ template<typename _Class, typename _T>
 struct decl_type<_T _Class::*>
 {
 	typedef _T type;
-};
-
-/**
- * @brief 包装返回值、参数、所属类以得到函数指针的类型，_Class=void则视作普通函数类型，否则视作成员函数类型，函数类型转函数指针使用std::decay
- */
-template<typename _Class, typename _RetType, typename ... _ArgTypes>
-struct func_type
-{
-	typedef typename _if<type_equal<_Class, void>::value>::resolve_type<_RetType (*)(_ArgTypes...), _RetType (_Class::*)(_ArgTypes...)>::type type;
 };
 
 template<typename _T>
@@ -657,23 +844,22 @@ struct is_assignable
 };
 
 /**
- * @brief 构造类成员类型
+ * @brief 包装指针的类型，_Class=void则视作非成员类型，否则视作成员类型
  */
 template<typename _Class, typename _T>
-struct pmemb_type
+struct ptr_type
 {
-	static const type_classification classification = type_classification::MEMB_FIELD;
+	static const type_classification classification = to_memb_classification(type_classification_of_t<_T>::value); //_Class不为void则转换为对应的成员类型
+
 	typedef _T _Class::*type;
 };
 
-template<typename _Class, typename _RetType, typename ..._ArgTypes>
-struct pmemb_type<_Class, _RetType(_ArgTypes...)>
+template<typename _T>
+struct ptr_type<void, _T>
 {
-	static const type_classification classification = type_classification::MEMB_FUNCTION;
-	typedef _RetType (_Class::*type)(_ArgTypes...);
+	static const type_classification classification = to_orid_classification(type_classification_of_t<_T>::value);
 
-	typedef _RetType return_type;
-	typedef parameters_pack<_ArgTypes...> args_type;
+	typedef _T* type;
 };
 
 }
