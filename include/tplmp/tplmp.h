@@ -538,7 +538,13 @@ protected:
 	// 超出索引且不是end迭代器的无效迭代器
 	struct __iterator_impl_oob
 	{
+	private:
+		struct iterator_oob;
+
+	public:
 		static const int index = -1;
+
+		typedef iterator_oob type;
 
 		typedef __iterator_impl_oob prev;
 		typedef __iterator_impl_oob next; //下一个还是本类
@@ -567,7 +573,13 @@ protected:
 	template<typename ..._Params>
 	struct __iterator_impl<sizeof...(_Params), _Params...>
 	{
+	private:
+		struct pack_end;
+
+	public:
 		static const int index = sizeof...(_Params);
+
+		typedef pack_end type;
 
 		typedef iterator<index - 1, _Params...> prev; //上一个迭代器是最后一个元素
 		typedef __iterator_impl_oob next;
@@ -583,6 +595,108 @@ struct iterator: __iterator_impl_base, public if_else<_Index >= 0 && _Index <= s
 				__iterator_impl_base:: __iterator_impl <_Index, _Params...>,
 				__iterator_impl_base:: __iterator_impl_oob
 				>::type
+{
+};
+
+struct __iterate_impl_base
+{
+protected:
+	template<typename _Result>
+	struct __iterate_impl_end
+	{
+		typedef _Result type; //迭代结束时的最终结果
+	};
+
+	template<
+			typename _CurrentIter,
+			typename _EndIter,
+			template<typename, typename, typename ...> typename _Op,  //_Op是模板，模板参数中声明模板实现类型的Callable
+	typename _Result,
+	typename ..._OpParams
+	>
+	struct __forward_iterate_impl
+	{
+		typedef typename __forward_iterate_impl<
+		typename _CurrentIter::next,
+		_EndIter,
+		_Op,
+		typename _Op<_CurrentIter, _Result, _OpParams...>::type, //每次迭代时都将本次_Op处理_CurrentIter得到的结果传入下一次迭代
+		_OpParams...
+		>::type type;
+	};
+
+	template<
+	typename _EndIter,
+	template<typename, typename, typename ...> typename _Op,
+	typename _Result,
+	typename ..._OpParams
+	> //到达end迭代器
+	struct __forward_iterate_impl<_EndIter, _EndIter, _Op, _Result, _OpParams...>: __iterate_impl_end<_Result>
+	{
+	};
+
+	template<
+	typename _CurrentIter,
+	typename _EndIter,
+	template<typename, typename, typename ...> typename _Op,
+	typename _Result,
+	typename ..._OpParams
+	>
+	struct __inverse_iterate_impl
+	{
+		typedef typename __inverse_iterate_impl<
+		typename _CurrentIter::prev,
+		_EndIter,
+		_Op,
+		typename _Op<_CurrentIter, _Result, _OpParams...>::type,
+		_OpParams...
+		>::type type;
+	};
+
+	template<
+	typename _EndIter,
+	template<typename, typename, typename ...> typename _Op,
+	typename _Result,
+	typename ..._OpParams
+	>
+	struct __inverse_iterate_impl<_EndIter, _EndIter, _Op, _Result, _OpParams...>: __iterate_impl_end<_Result>
+	{
+	};
+};
+
+/**
+ * @brief 正向迭代。_Op必须是模板，其中
+ * 		  接收的第一个类型参数必须是当前迭代器，接收的第二个参数必须是上一次（或初始）的结果，且必须定义了'type'作为当前迭代结果。
+ * 		  在此之后可以有任意多个其他参数，这些参数在迭代过程中保持不变。
+ */
+template<
+		typename _BeginIter,
+		typename _EndIter,
+		template<typename, typename, typename ...> typename _Op,
+typename _Result,
+typename ..._OpParams>
+struct forward_iterate: __iterate_impl_base, public if_else<_BeginIter::index <= _EndIter::index>
+::resolve_t<
+__iterate_impl_base::__forward_iterate_impl<_BeginIter, _EndIter, _Op, _Result, _OpParams...>,
+__iterate_impl_base::__iterate_impl_end<_Result>
+>::type
+{
+};
+
+/**
+ * @brief 逆向迭代
+ */
+template<
+		typename _BeginIter,
+		typename _EndIter,
+		template<typename, typename, typename ...> typename _Op,
+typename _Result,
+typename ..._OpParams>
+struct inverse_iterate: __iterate_impl_base, public if_else<_BeginIter::index >= _EndIter::index>
+::resolve_t<
+__iterate_impl_base::__inverse_iterate_impl<_BeginIter, _EndIter, _Op, _Result, _OpParams...>,
+__iterate_impl_base::__iterate_impl_end<_Result>
+>::type
 {
 };
 
@@ -620,6 +734,24 @@ struct type_pack
 	};
 
 	/**
+	 * @brief 在类型列表最前方添加新类型
+	 */
+	template<typename ... _PrependParames>
+	struct prepend‌
+	{
+		typedef type_pack<_PrependParames..., _Params...> type;
+	};
+
+	/**
+	 * @brief 在类型列表最后方添加新类型
+	 */
+	template<typename ... _AppendParames>
+	struct append
+	{
+		typedef type_pack<_Params..., _AppendParames...> type;
+	};
+
+	/**
 	 * @brief 指定索引的类型
 	 */
 	template<int _Index>
@@ -635,13 +767,13 @@ struct type_pack
 	using end = iterator_at<size>; //迭代递归终止，必须通过对迭代器参数类型偏特化为end来终止递归，否则将无限递归直到报错
 
 private:
-	template<typename _T, typename _Iter>
+	template<typename _T, typename _CurrentIter>
 	struct __first_index_of_impl
 	{
-		static const int value = if_else<type_equal<_T, typename _Iter::type>::value>
+		static const int value = if_else<type_equal<_T, typename _CurrentIter::type>::value>
 				::_return(
-						_Iter::index, //类型相同则当前索引
-						__first_index_of_impl<_T, typename _Iter::next>::value //类型不同则继续迭代下一个元素
+						_CurrentIter::index, //类型相同则当前索引
+						__first_index_of_impl<_T, typename _CurrentIter::next>::value //类型不同则继续迭代下一个元素
 						);
 	};
 
@@ -649,6 +781,12 @@ private:
 	struct __first_index_of_impl<_T, end>
 	{
 		static const int value = -1; //迭代至最后一个元素返回-1
+	};
+
+	template<typename _Iter, typename _SlicePack>
+	struct __slice_pack_impl
+	{
+		typedef typename _SlicePack::append<typename _Iter::type>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
 	};
 
 public:
@@ -660,6 +798,27 @@ public:
 	{
 		static const int value = size == 0 ? -1 : __first_index_of_impl<_T, begin>::value;
 	};
+
+	/**
+	 * @brief 提取索引为[_BeginIndex, _EndIndex)的数组切片
+	 */
+	template<int _BeginIndex, int _EndIndex>
+	struct slice_pack
+	{
+		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, __slice_pack_impl, type_pack<>>::type type;
+	};
+
+	/**
+	 * @brief 左侧_Num个类型
+	 */
+	template<int _Num>
+	using left_pack = slice_pack<begin::index, _Num>;
+
+	/**
+	 * @brief 右侧_Num个类型
+	 */
+	template<int _Num>
+	using right_pack = slice_pack<size - _Num, end::index>;
 };
 
 template<typename _Value>
