@@ -60,6 +60,26 @@ __attribute__((always_inline)) inline constexpr _T1& cast(_T2&& rv)
 }
 
 /**
+ * @brief 包装类型，用于延迟实例化_T，防止无限递归或实例化不期望的类型。
+ * 		  模板在实际使用它（包括它typedef的类型）时才会实例化。
+ * 		  例如有
+ * 		  template<typename _T>
+ * 		  struct Template
+ * 		  {
+ * 		  	typedef _T type;
+ * 		  };
+ * 		  如果只是声明Template<_T>，则不会实例化_T；如果使用Template<_T>::type则会直接触发_T的实例化。
+ * 		  但如果使用Template<type_t<_T>>::type则只会实例化type_t<_T>而不会实例化_T；
+ * 		  等需要实例化_T的时候再使用type_t<_T>::type即可实例化_T。
+ * 		  此特性用于if_else<>::resolve_t<>做分支选择时，如果不希望在选择时将两个结果都实例化，则需要使用此模板包装。
+ */
+template<typename _T>
+struct type_t
+{
+	typedef _T type;
+};
+
+/**
  * @brief 将常量值打包成类型。
  * 		  模板元编程的一等公民。
  */
@@ -87,6 +107,150 @@ struct is_constexpr<_constexpr<_T, _Value>>
 {
 	typedef typename _constexpr<_T, _Value>::type type;
 	static constexpr bool value = true;
+};
+
+/**
+ * @brief 基本类型算术实现定义。
+ * 		  result_op_type必须能和op_type进行op指定的运算；
+ * 		  且result_type模板定义必须是result_type<result_op_type _Value>。
+ */
+#define __operator_impl__(op_name, result_type, result_op_type, op, op_type)\
+		template<result_op_type _Result, op_type _First, op_type ..._OpValues>\
+		struct op_name##_intl\
+		{\
+			typedef typename op_name##_intl<_Result op _First, _OpValues...>::type type;\
+		};\
+		template<result_op_type _Result, op_type _First>\
+		struct op_name##_intl<_Result, _First>\
+		{\
+			typedef result_type<_Result op _First> type;\
+		};\
+		template<result_op_type _Result, op_type ..._OpValues>\
+		struct op_name\
+		{\
+			typedef typename op_name##_intl<_Result, _OpValues...>::type type;\
+		};\
+		template<result_op_type _Result>\
+		struct op_name<_Result>\
+		{\
+			typedef result_type<_Result> type;\
+		};
+
+/**
+ * @brief bool类型常量，支持逻辑运算
+ */
+template<bool _Value>
+using _bool = _constexpr<bool, _Value>;
+
+struct __bool_impl_base
+{
+protected:
+	//逻辑与
+	__operator_impl__(__and_impl, _bool, bool, &&, bool)
+
+	//逻辑或
+	__operator_impl__(__or_impl, _bool, bool, ||, bool)
+};
+
+template<bool _Value>
+struct _constexpr<bool, _Value> : __bool_impl_base
+{
+	typedef bool type;
+	static constexpr type value = _Value;
+
+	struct _not
+	{
+		typedef _bool<!_Value> type;
+	};
+
+	template<bool ..._OpValues>
+	struct _and
+	{
+		typedef typename __and_impl<_Value, _OpValues...>::type type;
+	};
+
+	template<bool ..._OpValues>
+	struct _or
+	{
+		typedef typename __or_impl<_Value, _OpValues...>::type type;
+	};
+};
+
+using _true = _bool<true>;
+using _false = _bool<false>;
+
+/**
+ * @brief 数值类型的_constexpr<>封装，支持算术运算
+ */
+#define __def_integer_constexpr__(constexpr_name, int_type)\
+		template<int_type _Value>\
+		using constexpr_name = tplmp::_constexpr<int_type, _Value>;\
+		struct constexpr_name##_impl_base\
+		{\
+		protected:\
+			__operator_impl__(__add_impl, constexpr_name, int_type, +, int_type)\
+			__operator_impl__(__sub_impl, constexpr_name, int_type, -, int_type)\
+			__operator_impl__(__mul_impl, constexpr_name, int_type, *, int_type)\
+			__operator_impl__(__div_impl, constexpr_name, int_type, /, int_type)\
+			__operator_impl__(__mod_impl, constexpr_name, int_type, %, int_type)\
+		};\
+		template<int_type _Value>\
+		struct _constexpr<int_type, _Value> : constexpr_name##_impl_base\
+		{\
+			typedef int_type type;\
+			static constexpr int_type value = _Value;\
+			template<int_type ... _OpValues>\
+			struct add\
+			{\
+				typedef typename __add_impl<_Value, _OpValues...>::type type;\
+			};\
+			template<int_type ... _OpValues>\
+			struct sub\
+			{\
+				typedef typename __sub_impl<_Value, _OpValues...>::type type;\
+			};\
+			struct inc\
+			{\
+				typedef typename add<1>::type type;\
+			};\
+			struct dec\
+			{\
+				typedef typename sub<1>::type type;\
+			};\
+			template<int_type ... _OpValues>\
+			struct mul\
+			{\
+				typedef typename __mul_impl<_Value, _OpValues...>::type type;\
+			};\
+			template<int_type ... _OpValues>\
+			struct div\
+			{\
+				typedef typename __div_impl<_Value, _OpValues...>::type type;\
+			};\
+			template<int_type ... _OpValues>\
+			struct mod\
+			{\
+				typedef typename __mod_impl<_Value, _OpValues...>::type type;\
+			};\
+		};
+
+__def_integer_constexpr__(_char, char)
+__def_integer_constexpr__(unsigned_char, unsigned char)
+__def_integer_constexpr__(_short, short)
+__def_integer_constexpr__(unsigned_short, unsigned short)
+__def_integer_constexpr__(_int, int)
+__def_integer_constexpr__(unsigned_int, unsigned int)
+__def_integer_constexpr__(_long, long)
+__def_integer_constexpr__(unsigned_long, unsigned long)
+__def_integer_constexpr__(long_long, long long)
+__def_integer_constexpr__(unsigned_long_long, unsigned long long)
+
+template<typename ..._Params>
+struct _sizeof
+{
+	static const int value = sizeof...(_Params);
+
+	typedef _int<value> type;
 };
 
 /**
@@ -270,33 +434,6 @@ struct if_else<false>
 	}
 };
 
-struct bool_type
-{
-	using _true = __constexpr__(true);
-	using _false = __constexpr__(false);
-
-	template<typename _T>
-	inline static constexpr bool bool_of(void)
-	{
-		return type_equal<_T, _true>::value;
-	}
-
-	template<bool _Value>
-	struct of
-	{
-		typedef typename if_else<_Value>
-		::resolve_t<
-				_true,
-				_false>
-		::type type;
-	};
-};
-
-/**
- * 得到表达式的bool_type返回类型对应的值，不会实际计算表达式，能避免一些编译错误
- */
-#define __bool_type_expr__(expr) tplmp::bool_type::bool_of<decltype(expr)>()
-
 /**
  * @brief 用作匹配具有非模板重载的重载模板函数的占位符。
  * 		  这个占位符对应的非模板重载函数参数类型必须是_T1/_T2，重载模板函数参数类型必须是_T2/_T1，且这两个参数必须传入本类对象。
@@ -375,17 +512,17 @@ private:
 	 * 注：此处不是SFINAE（因此不能使用变长参数列表...），而是函数重载决议优先级，即从多个有效候选函数中决议出最优的那个使用。
 	 * 为了保证非模板函数优先匹配，第二个参数必须与传入__check()的第二个参数类型完全一致
 	 */
-	static bool_type::_false __check(_Target, int) noexcept;
+	static _false __check(_Target, int) noexcept;
 
 	template<typename _Any>
-	static bool_type::_true __check(_Original, _Any) noexcept;
+	static _true __check(_Original, _Any) noexcept;
 
 public:
 	/**
 	 * 非const对象，若可转换则__conversion_placeholder()返回类型为_Original，否则返回类型有两种候选：_Original、_Target，需要与非模板函数进一步匹配决议。
-	 * bool_of_expr()内部没有实际进行计算，不会抛出编译错误
+	 * __check()未实际计算，不会抛出编译错误。
 	 */
-	static const bool value = __bool_type_expr__(__check(__conversion_placeholder<_Target, _Original>(), int()));
+	static const bool value = decltype(__check(__conversion_placeholder<_Target, _Original>(), int()))::value;
 };
 
 /**
@@ -477,6 +614,11 @@ inline constexpr bool is_memb_classification(type_classification classification)
 	return classification == type_classification::MEMB_FIELD || classification == type_classification::MEMB_FUNCTION;
 }
 
+/**
+ * @brief 索引越界标识符
+ */
+struct out_of_bounds;
+
 // ***** 类型参数包 *****
 
 inline static constexpr bool is_index_valid(int idx, int length)
@@ -484,16 +626,15 @@ inline static constexpr bool is_index_valid(int idx, int length)
 	return idx >= 0 && idx < length;
 }
 
+template<int _Index, typename ... _Params>
+struct type_at;
+
 struct __type_at_impl_base //避免外部模板类的不同实例都实例化相同的__type_at_impl<>模板，又限制外部访问
 {
 protected:
 	struct __type_at_impl_oob //索引越界
 	{
-	private:
-		struct oob;
-
-	public:
-		typedef oob type; //无效索引
+		typedef out_of_bounds type;
 	};
 
 	template<int _Index, typename _First, typename ... _RestParams>
@@ -501,15 +642,9 @@ protected:
 	{
 		typedef typename if_else<_Index <= 0>
 		::resolve_t<
-				_First,
-				typename __type_at_impl<_Index - 1, _RestParams...>::type
-		>::type type;
-	};
-
-	template<int _Index, typename _First>
-	struct __type_at_impl<_Index, _First> //迭代终止偏特化
-	{
-		typedef _First type;
+				type_t<_First>,
+				type_at<_Index - 1, _RestParams...>
+		>::type::type type;
 	};
 };
 
@@ -538,13 +673,9 @@ protected:
 	// 超出索引且不是end迭代器的无效迭代器
 	struct __iterator_impl_oob
 	{
-	private:
-		struct iterator_oob;
-
-	public:
 		static const int index = -1;
 
-		typedef iterator_oob type;
+		typedef out_of_bounds type;
 
 		typedef __iterator_impl_oob prev;
 		typedef __iterator_impl_oob next; //下一个还是本类
@@ -598,6 +729,24 @@ struct iterator: __iterator_impl_base, public if_else<_Index >= 0 && _Index <= s
 {
 };
 
+//***** 迭代算法 *****
+
+template<
+		typename _BeginIter,
+		typename _EndIter,
+		template<typename, typename, typename ...> typename _Op,
+typename _Result,
+typename ..._OpParams>
+struct forward_iterate;
+
+template<
+		typename _BeginIter,
+		typename _EndIter,
+		template<typename, typename, typename ...> typename _Op,
+typename _Result,
+typename ..._OpParams>
+struct inverse_iterate;
+
 struct __iterate_impl_base
 {
 protected:
@@ -616,23 +765,13 @@ protected:
 	>
 	struct __forward_iterate_impl
 	{
-		typedef typename __forward_iterate_impl<
+		typedef typename forward_iterate<
 		typename _CurrentIter::next,
 		_EndIter,
 		_Op,
 		typename _Op<_CurrentIter, _Result, _OpParams...>::type, //每次迭代时都将本次_Op处理_CurrentIter得到的结果传入下一次迭代
 		_OpParams...
 		>::type type;
-	};
-
-	template<
-	typename _EndIter,
-	template<typename, typename, typename ...> typename _Op,
-	typename _Result,
-	typename ..._OpParams
-	> //到达end迭代器
-	struct __forward_iterate_impl<_EndIter, _EndIter, _Op, _Result, _OpParams...>: __iterate_impl_end<_Result>
-	{
 	};
 
 	template<
@@ -644,7 +783,7 @@ protected:
 	>
 	struct __inverse_iterate_impl
 	{
-		typedef typename __inverse_iterate_impl<
+		typedef typename inverse_iterate<
 		typename _CurrentIter::prev,
 		_EndIter,
 		_Op,
@@ -652,22 +791,13 @@ protected:
 		_OpParams...
 		>::type type;
 	};
-
-	template<
-	typename _EndIter,
-	template<typename, typename, typename ...> typename _Op,
-	typename _Result,
-	typename ..._OpParams
-	>
-	struct __inverse_iterate_impl<_EndIter, _EndIter, _Op, _Result, _OpParams...>: __iterate_impl_end<_Result>
-	{
-	};
 };
 
 /**
  * @brief 正向迭代。_Op必须是模板，其中
  * 		  接收的第一个类型参数必须是当前迭代器，接收的第二个参数必须是上一次（或初始）的结果，且必须定义了'type'作为当前迭代结果。
  * 		  在此之后可以有任意多个其他参数，这些参数在迭代过程中保持不变。
+ * 		  同时还必须定义static const bool iterate_next;用于决定是否迭代下一个元素，如果为false则终止迭代。
  */
 template<
 		typename _BeginIter,
@@ -677,7 +807,11 @@ typename _Result,
 typename ..._OpParams>
 struct forward_iterate: __iterate_impl_base, public if_else<_BeginIter::index <= _EndIter::index>
 ::resolve_t<
+typename if_else<_Op<_BeginIter, _Result, _OpParams...>::iterate_next>
+::resolve_t<
 __iterate_impl_base::__forward_iterate_impl<_BeginIter, _EndIter, _Op, _Result, _OpParams...>,
+__iterate_impl_base::__iterate_impl_end<typename _Op<_BeginIter, _Result, _OpParams...>::type> //将当前结果作为迭代结果并终止迭代
+>::type,
 __iterate_impl_base::__iterate_impl_end<_Result>
 >::type
 {
@@ -694,7 +828,11 @@ typename _Result,
 typename ..._OpParams>
 struct inverse_iterate: __iterate_impl_base, public if_else<_BeginIter::index >= _EndIter::index>
 ::resolve_t<
+typename if_else<_Op<_BeginIter, _Result, _OpParams...>::iterate_next>
+::resolve_t<
 __iterate_impl_base::__inverse_iterate_impl<_BeginIter, _EndIter, _Op, _Result, _OpParams...>,
+__iterate_impl_base::__iterate_impl_end<typename _Op<_BeginIter, _Result, _OpParams...>::type>
+>::type,
 __iterate_impl_base::__iterate_impl_end<_Result>
 >::type
 {
@@ -760,6 +898,9 @@ struct type_pack
 		typedef typename type_at<_Index, _Params...>::type type;
 	};
 
+	/**
+	 * @brief 指定索引的迭代器
+	 */
 	template<int _Index>
 	using iterator_at = iterator<_Index, _Params...>;
 
@@ -767,26 +908,19 @@ struct type_pack
 	using end = iterator_at<size>; //迭代递归终止，必须通过对迭代器参数类型偏特化为end来终止递归，否则将无限递归直到报错
 
 private:
-	template<typename _T, typename _CurrentIter>
-	struct __first_index_of_impl
+	template<typename _CurrentIter, typename _FindIndex, typename _T, typename _Size>
+	struct __first_index_of_op
 	{
-		static const int value = if_else<type_equal<_T, typename _CurrentIter::type>::value>
-				::_return(
-						_CurrentIter::index, //类型相同则当前索引
-						__first_index_of_impl<_T, typename _CurrentIter::next>::value //类型不同则继续迭代下一个元素
-						);
+		static const bool iterate_next = !type_equal<typename _CurrentIter::type, _T>::value; //类型不同则继续迭代下一个元素
+
+		typedef _int<_CurrentIter::index < _Size::value ? _CurrentIter::index : -1> type;
 	};
 
-	template<typename _T>
-	struct __first_index_of_impl<_T, end>
+	template<typename _CurrentIter, typename _SlicePack>
+	struct __slice_pack_op
 	{
-		static const int value = -1; //迭代至最后一个元素返回-1
-	};
-
-	template<typename _Iter, typename _SlicePack>
-	struct __slice_pack_impl
-	{
-		typedef typename _SlicePack::append<typename _Iter::type>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
+		typedef typename _SlicePack::append<typename _CurrentIter::type>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
+		static const bool iterate_next = true;
 	};
 
 public:
@@ -796,7 +930,7 @@ public:
 	template<typename _T>
 	struct first_index_of
 	{
-		static const int value = size == 0 ? -1 : __first_index_of_impl<_T, begin>::value;
+		static const int value = forward_iterate<begin, end, __first_index_of_op, _int<-1>, _T, _sizeof<_Params...>>::type::value;
 	};
 
 	/**
@@ -805,7 +939,7 @@ public:
 	template<int _BeginIndex, int _EndIndex>
 	struct slice_pack
 	{
-		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, __slice_pack_impl, type_pack<>>::type type;
+		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, __slice_pack_op, type_pack<>>::type type;
 	};
 
 	/**
