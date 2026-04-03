@@ -7,6 +7,7 @@ namespace tplmp
 template<bool _AssertCond, typename ..._Ts>
 struct __ce_print_types_t
 {
+	typedef void see_the_following_list;
 };
 
 template<typename ..._Ts>
@@ -31,7 +32,7 @@ public:
 //需要在namespace中声明
 #define __ce_print_types__(_AssertCond, ...) template class tplmp::__ce_print_types_t<_AssertCond, ##__VA_ARGS__>
 //需要在类体内声明
-#define __ce_print_types_in__(_AssertCond, ...) static int _ = tplmp::__ce_print_types_t<_AssertCond, ##__VA_ARGS__>::value
+#define __ce_print_types_in__(_AssertCond, ...) typedef tplmp::__ce_print_types_t<_AssertCond, ##__VA_ARGS__>::see_the_following_list _
 
 #define __assert_classification_equal__(classification1, classification2) static_assert(classification1 == classification2, "classification '" #classification1 "' and '" #classification2 "' not match")
 
@@ -61,7 +62,7 @@ __attribute__((always_inline)) inline constexpr _T1& cast(_T2&& rv)
 }
 
 /**
- * @brief 对类型包装一次，可通过::type获取储存的类型。
+ * @brief 对类型包装一次，可通过type_t<>::type获取储存的类型。
  */
 template<typename _T>
 struct type_t
@@ -70,7 +71,7 @@ struct type_t
 };
 
 /**
- * @brief 将类型包装为依赖类型。
+ * @brief 将类型包装为依赖类型，即值依赖于模板参数的类型。
  * 		  C++标准规定，当一个类型模板参数_T直接出现在模板的形参列表、返回类型、函数体中时，那么在实例化模板时，必须保证_T是完整类型。
  * 		  在模板实例化阶段，编译器不深入解析依赖类型内部，只保留语法结构。如果模板参数为type_t<_T>，则不要求依赖类型_T实例化或有定义。
  */
@@ -254,6 +255,51 @@ __def_integer_constexpr__(_long, long)
 __def_integer_constexpr__(unsigned_long, unsigned long)
 __def_integer_constexpr__(long_long, long long)
 __def_integer_constexpr__(unsigned_long_long, unsigned long long)
+
+#undef __def_integer_constexpr__
+
+template<typename _IntType, _IntType _Index>
+struct integer_iterator
+{
+	static const int index = _Index;
+
+	typedef _constexpr<_IntType, index> type;
+
+	template<_IntType _Stride>
+	struct prev_i
+	{
+		typedef integer_iterator<_IntType, index - _Stride> type;
+	};
+
+	template<_IntType _Stride>
+	struct next_i
+	{
+		typedef integer_iterator<_IntType, index + _Stride> type;
+	};
+
+	typedef typename prev_i<1>::type prev; //上一个迭代器
+	typedef typename next_i<1>::type next; //下一个迭代器
+
+	static const bool has_prev = true;
+	static const bool has_next = true;
+};
+
+#define __def_integer_iterator__(iterator_name, int_type)\
+		template<int_type _Index>\
+		using iterator_name = integer_iterator<int_type, _Index>;
+
+__def_integer_iterator__(char_iterator, char)
+__def_integer_iterator__(unsigned_char_iterator, unsigned char)
+__def_integer_iterator__(short_iterator, short)
+__def_integer_iterator__(unsigned_short_iterator, unsigned short)
+__def_integer_iterator__(int_iterator, int)
+__def_integer_iterator__(unsigned_int_iterator, unsigned int)
+__def_integer_iterator__(long_iterator, long)
+__def_integer_iterator__(unsigned_long_iterator, unsigned long)
+__def_integer_iterator__(long_long_iterator, long long)
+__def_integer_iterator__(unsigned_long_long_iterator, unsigned long long)
+
+#undef __def_integer_iterator__
 
 template<typename ..._Params>
 struct _sizeof
@@ -536,9 +582,111 @@ inline constexpr bool is_memb_classification(type_classification classification)
 }
 
 /**
- * @brief 索引越界标识符
+ * @brief 变量或函数所属的类，如果不是成员则type为void
  */
-struct out_of_bounds;
+template<typename _T>
+struct decl_class
+{
+	typedef void type;
+};
+
+template<typename _Class, typename _T>
+struct decl_class<_T _Class::*>
+{
+	typedef _Class type;
+};
+
+/**
+ * @brief 变量或函数的声明类型，声明类型将成员指针类型转换为普通类型，成员函数丢失this参数
+ */
+template<typename _T>
+struct decl_type
+{
+	typedef _T type;
+};
+
+template<typename _Class, typename _T>
+struct decl_type<_T _Class::*>
+{
+	typedef _T type;
+};
+
+/**
+ * @brief 可以得到指针、引用等的原本类型，即传入T*或T**甚至更高次数的指针可以得到T
+ */
+template<typename _T>
+struct type_of
+{
+	typedef _T type;
+};
+
+template<typename _T>
+struct type_of<_T*>
+{
+	typedef typename type_of<_T>::type type; //递归地获取指针类型
+};
+
+template<typename _T>
+struct type_of<_T&>
+{
+	typedef _T type;
+};
+
+template<typename _T>
+struct type_of<_T&&>
+{
+	typedef _T type;
+};
+
+/**
+ * @brief 包装指针的类型，_Class=void则视作非成员类型，否则视作成员类型
+ */
+template<typename _Class, typename _T>
+struct ptr_type
+{
+	static const type_classification classification = to_memb_classification(type_classification_of_t<_T>::value); //_Class不为void则转换为对应的成员类型
+
+	typedef _T _Class::*type;
+};
+
+template<typename _T>
+struct ptr_type<void, _T>
+{
+	static const type_classification classification = to_orid_classification(type_classification_of_t<_T>::value);
+
+	typedef _T* type;
+};
+
+template<typename _Constexpr1, typename _Constexpr2>
+struct max
+{
+	__assert_not_impl__(_Constexpr1);
+	__assert_not_impl__(_Constexpr2);
+};
+
+template<typename _T1, _T1 _N1, typename _T2, _T2 _N2>
+struct max<_constexpr<_T1, _N1>, _constexpr<_T2, _N2> >
+{
+	static constexpr typename if_else<(_N1 > _N2)>::resolve_t<_T1, _T2>::type value = if_else<(_N1 > _N2)>::_return(_N1, _N2);
+};
+
+template<typename _Constexpr1, typename _Constexpr2>
+struct min
+{
+	__assert_not_impl__(_Constexpr1);
+	__assert_not_impl__(_Constexpr2);
+};
+
+template<typename _T1, _T1 _N1, typename _T2, _T2 _N2>
+struct min<_constexpr<_T1, _N1>, _constexpr<_T2, _N2> >
+{
+	static constexpr typename if_else<(_N1 < _N2)>::resolve_t<_T1, _T2>::type value = if_else<(_N1 < _N2)>::_return(_N1, _N2);
+};
+
+/**
+ * @brief 无效类型
+ */
+struct invalid_type;
 
 // ***** 类型参数包 *****
 
@@ -555,17 +703,27 @@ struct __type_at_impl_base //避免外部模板类的不同实例都实例化相
 protected:
 	struct __type_at_impl_oob //索引越界
 	{
-		typedef out_of_bounds type;
+		typedef invalid_type type;
+	};
+
+	template<int _Index, typename ... _RestParams>
+	struct __type_at_impl
+	{
 	};
 
 	template<int _Index, typename _First, typename ... _RestParams>
-	struct __type_at_impl
+	struct __type_at_impl<_Index, _First, _RestParams...>
 	{
 		typedef typename if_else<_Index <= 0>
 		::resolve_t<
 				type_t<_First>,
 				type_at<_Index - 1, _RestParams...> //此处不使用type_at<>::type避免实例化type_at<>
 		>::type::type type;
+	};
+
+	template<int _Index>
+	struct __type_at_impl<_Index> : __type_at_impl_oob
+	{
 	};
 };
 
@@ -588,11 +746,6 @@ struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeo
 template<int _Index, typename ..._Params>
 struct iterator;
 
-/**
- * @brief 终止迭代器的标识符
- */
-struct iterator_end;
-
 struct __iterator_impl_base
 {
 protected:
@@ -601,7 +754,7 @@ protected:
 	{
 		static const int index = -1;
 
-		typedef out_of_bounds type;
+		typedef invalid_type type;
 
 		typedef __iterator_impl_oob prev;
 		typedef __iterator_impl_oob next; //下一个还是本类
@@ -626,13 +779,13 @@ protected:
 		static const bool has_next = true;
 	};
 
-	//正向迭代最后一个元素之后的下一个迭代器，即end迭代器
+//正向迭代最后一个元素之后的下一个迭代器，即end迭代器
 	template<typename ..._Params>
 	struct __iterator_impl<sizeof...(_Params), _Params...>
 	{
 		static const int index = sizeof...(_Params);
 
-		typedef iterator_end type;
+		typedef invalid_type type;
 
 		typedef iterator<index - 1, _Params...> prev; //上一个迭代器是最后一个元素
 		typedef __iterator_impl_oob next;
@@ -641,13 +794,13 @@ protected:
 		static const bool has_next = false;
 	};
 
-	//逆向迭代时，参数包第一个元素之前的下一个迭代器，即rend迭代器
+//逆向迭代时，参数包第一个元素之前的下一个迭代器，即rend迭代器
 	template<typename ..._Params>
 	struct __iterator_impl<-1, _Params...>
 	{
 		static const int index = -1;
 
-		typedef iterator_end type;
+		typedef invalid_type type;
 
 		typedef __iterator_impl_oob prev;
 		typedef iterator<index + 1, _Params...> next;
@@ -756,7 +909,6 @@ protected:
 	};
 };
 
-//@formatter:off
 /**
  * @brief 正向迭代，迭代包含_BeginIter但不包含_EndIter。
  * 		  参数_Op、_Cond必须是模板，其中：
@@ -769,19 +921,19 @@ template<
 		typename _BeginIter,
 		typename _EndIter,
 		template<typename, typename, typename ...> typename _Op,
-		template<typename, typename, typename ...> typename _Cond,
+template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
 struct forward_iterate: __iterate_impl_base, public if_else<(_BeginIter::index < _EndIter::index)>
 ::resolve_t<
-	typename if_else<_Cond<_BeginIter, _Result, _OpParams...>::iterate_next> //当前迭代器能进行下一次迭代且下一个迭代器不是end迭代器
-	::resolve_t<
-		__iterate_impl_base::__forward_iterate_impl<_BeginIter, _EndIter, _Op, _Cond, _Result, _OpParams...>,
-		//如果使用_Op<_BeginIter, _Result, _OpParams...>::type则会引发该_Op<>的初始化，一旦_BeginIter不是有效的元素迭代器就会导致_Op访问无效元素
-		//因此此处使用lazy_tpl<>且不直接访问lazy_tpl<>::type，进行延迟实例化，防止_Op<>直接实例化
-		lazy_tpl<_Op, _BeginIter, _Result, _OpParams...>
-	>::type, //将当前结果作为迭代结果并终止迭代
-	__iterate_impl_base::__iterate_impl_end<_Result>
+typename if_else<_Cond<_BeginIter, _Result, _OpParams...>::iterate_next> //当前迭代器能进行下一次迭代且下一个迭代器不是end迭代器
+::resolve_t<
+__iterate_impl_base::__forward_iterate_impl<_BeginIter, _EndIter, _Op, _Cond, _Result, _OpParams...>,
+//如果使用_Op<_BeginIter, _Result, _OpParams...>::type则会引发该_Op<>的初始化，一旦_BeginIter不是有效的元素迭代器就会导致_Op访问无效元素
+//因此此处使用lazy_tpl<>且不直接访问lazy_tpl<>::type，进行延迟实例化，防止_Op<>直接实例化
+lazy_tpl<_Op, _BeginIter, _Result, _OpParams...>
+>::type,//将当前结果作为迭代结果并终止迭代
+__iterate_impl_base::__iterate_impl_end<_Result>
 >::type
 {
 };
@@ -793,31 +945,105 @@ template<
 		typename _BeginIter,
 		typename _EndIter,
 		template<typename, typename, typename ...> typename _Op,
-		template<typename, typename, typename ...> typename _Cond,
+template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
 struct inverse_iterate: __iterate_impl_base, public if_else<(_BeginIter::index > _EndIter::index)>
 ::resolve_t<
-	typename if_else<_Cond<_BeginIter, _Result, _OpParams...>::iterate_next>
-	::resolve_t<
-		__iterate_impl_base::__inverse_iterate_impl<_BeginIter, _EndIter, _Op, _Cond, _Result, _OpParams...>,
-		lazy_tpl<_Op, _BeginIter, _Result, _OpParams...>
-	>::type,
-	__iterate_impl_base::__iterate_impl_end<_Result>
+typename if_else<_Cond<_BeginIter, _Result, _OpParams...>::iterate_next>
+::resolve_t<
+__iterate_impl_base::__inverse_iterate_impl<_BeginIter, _EndIter, _Op, _Cond, _Result, _OpParams...>,
+lazy_tpl<_Op, _BeginIter, _Result, _OpParams...>
+>::type,
+__iterate_impl_base::__iterate_impl_end<_Result>
 >::type
 {
 };
-//@formatter:on
 
+namespace iterate_cond
+{
 /**
  * @brief 始终迭代下一个
  */
 template<
-typename _CurrentIter, typename _Result>
-struct iterate_cond_always
+		typename _CurrentIter, typename _Result, typename ...>
+struct always
 {
 	static const bool iterate_next = true;
 };
+
+/**
+ * @brief 始终不迭代下一个
+ */
+template<
+		typename _CurrentIter, typename _Result, typename ...>
+struct never
+{
+	static const bool iterate_next = false;
+};
+
+/**
+ * @brief 查找直到计数为0
+ */
+template<int _Counter>
+struct until_appear
+{
+	template<int _CurrentIndex>
+	struct appear_counter
+	{
+		static const int value = _Counter;
+		static const int index = _CurrentIndex;
+
+		typedef appear_counter<_CurrentIndex> type;
+	};
+
+	// 迭代起始的计数器
+	using begin_appear_counter = appear_counter<-1>;
+};
+
+template<typename _CurrentIter, typename _AppearCounter, typename _T>
+struct until_appear_cond
+{
+	static const bool iterate_next = (_AppearCounter::value > 0) || (_AppearCounter::value == 0 && !type_equal<typename _CurrentIter::type, _T>::value); //计数器>0或等于0但类型不相同则继续迭代下一个元素
+};
+
+/**
+ * @brief 迭代中更新计数
+ */
+template<typename _CurrentIter, typename _AppearCounter, typename _T>
+struct until_appear_op
+{
+	static const bool equal = type_equal<typename _CurrentIter::type, _T>::value; //类内初始化为编译期内联常量，不会进入编译后的二进制文件
+
+	typedef typename if_else<(_AppearCounter::value > 0)>
+	::resolve_t<
+			typename until_appear<equal ? _AppearCounter::value - 1 : _AppearCounter::value>::appear_counter<_AppearCounter::index>, //计数不为0则减少计数，保持索引不变
+			typename until_appear<_AppearCounter::value>::appear_counter<equal ? _CurrentIter::index : _AppearCounter::index> //计数器为0，判断当前类型是否与给定目标类型相同，相同则返回索引，不同则索引不变
+	>::type type;
+};
+
+/**
+ * @brief 迭代中收集当前类型到目标type_pack<>末尾
+ */
+template<typename _CurrentIter, typename _CollectedPack>
+struct append_iter_type_op
+{
+	typedef typename _CollectedPack::append<typename _CurrentIter::type>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
+};
+
+/**
+ * @brief 迭代中收集_Op的不变参数类型到目标type_pack<>末尾
+ */
+template<typename _CurrentIter, typename _CollectedPack, typename ...OpParams>
+struct append_param_type_op
+{
+	typedef typename _CollectedPack::append<OpParams...>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
+};
+
+}
+
+template<typename _T, int _Num>
+struct pack_of_t;
 
 /**
  * @brief 类型参数包，用于保存模板参数而不展开，对于值参数，需要使用_constexpr<>将值封装为类型
@@ -912,6 +1138,9 @@ struct type_pack
 		typedef typename type_at<_Index, _Params...>::type type;
 	};
 
+	typedef typename at<0>::type front;
+	typedef typename at<size - 1>::type back;
+
 	/**
 	 * @brief 指定索引的迭代器
 	 */
@@ -924,43 +1153,6 @@ struct type_pack
 	using rbegin = rbegin_iterator<_Params...>;
 	using rend = rend_iterator<_Params...>;
 
-private:
-	//收集
-	template<typename _CurrentIter, typename _CollectedPack>
-	struct __append_type_op
-	{
-		typedef typename _CollectedPack::append<typename _CurrentIter::type>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
-		static const bool iterate_next = true;
-	};
-
-	//查找
-	template<int _Counter, int _CurrentIndex>
-	struct __find_op_result
-	{
-		static const int counter = _Counter;
-		static const int index = _CurrentIndex;
-	};
-
-	template<typename _CurrentIter, typename _IndexOfResult, typename _T, typename _Size>
-	struct __find_cond
-	{
-		static const bool iterate_next = (_IndexOfResult::counter > 0) || (_IndexOfResult::counter == 0 && !type_equal<typename _CurrentIter::type, _T>::value); //计数器>0或等于0但类型不相同则继续迭代下一个元素
-	};
-
-	template<typename _CurrentIter, typename _IndexOfResult, typename _T, typename _Size>
-	struct __find_op
-	{
-		static const bool equal = type_equal<typename _CurrentIter::type, _T>::value; //类内初始化为编译期内联常量，不会进入编译后的二进制文件
-
-		typedef typename if_else<(_IndexOfResult::counter > 0)>
-		::resolve_t<
-				__find_op_result <equal ? _IndexOfResult::counter - 1 : _IndexOfResult::counter, _IndexOfResult::index>, //计数不为0则减少计数，保持索引不变
-				__find_op_result <0, equal ? _CurrentIter::index : _IndexOfResult::index> //计数器为0，判断当前类型是否与给定目标类型相同，相同则返回索引，不同则索引不变
-		>::type type;
-	};
-
-public:
-
 	/**
 	 * @brief 获取索引为[_BeginIndex, _EndIndex)的类型中指定类型正向第_Count次出现时的索引
 	 */
@@ -970,9 +1162,11 @@ public:
 		static const int value = forward_iterate<
 				iterator_at<_BeginIndex>,
 				iterator_at<_EndIndex>,
-				__find_op, __find_cond, __find_op_result <_Count - 1, -1>,
-				_T,
-				_sizeof<_Params...>>::type::index;
+				iterate_cond::until_appear_op,
+				iterate_cond::until_appear_cond,
+				typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter,
+				_T
+				>::type::index;
 	};
 
 	template<typename _T, int _Count>
@@ -990,9 +1184,11 @@ public:
 		static const int value = inverse_iterate<
 				iterator_at<_BeginIndex>,
 				iterator_at<_EndIndex>,
-				__find_op, __find_cond, __find_op_result <_Count - 1, -1>,
-				_T,
-				_sizeof<_Params...>>::type::index;
+				iterate_cond::until_appear_op,
+				iterate_cond::until_appear_cond,
+				typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter,
+				_T
+				>::type::index;
 	};
 
 	template<typename _T, int _Count>
@@ -1001,13 +1197,19 @@ public:
 	template<typename _T>
 	using rfind_first = rfind<_T, 1>;
 
+	template<typename _T>
+	using find_last = rfind_first<_T>;
+
+	template<typename _T>
+	using rfind_last = find_first<_T>;
+
 	/**
 	 * @brief 提取索引为[_BeginIndex, _EndIndex)的数组切片
 	 */
 	template<int _BeginIndex, int _EndIndex>
 	struct slice
 	{
-		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, __append_type_op, iterate_cond_always, type_pack<>>::type type;
+		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::append_iter_type_op, iterate_cond::always, type_pack<> >::type type;
 	};
 
 	/**
@@ -1015,7 +1217,7 @@ public:
 	 */
 	struct inverse
 	{
-		typedef typename inverse_iterate<rbegin, rend, __append_type_op, iterate_cond_always, type_pack<>>::type type;
+		typedef typename inverse_iterate<rbegin, rend, iterate_cond::append_iter_type_op, iterate_cond::always, type_pack<> >::type type;
 	};
 
 	/**
@@ -1036,11 +1238,67 @@ public:
 	template<int _InsertIndex, typename ... _InsertParames>
 	struct insert
 	{
-		typedef typename left<_InsertIndex>
-		::append<_InsertParames...>
-		::append<_InsertParames...>
+		typedef typename left<_InsertIndex>::type
+		::append<_InsertParames...>::type
+		::append_pack<typename type::slice<_InsertIndex, end::index>::type>
 		::type type;
 	};
+
+	/**
+	 * @brief 移除索引为[_BeginIndex, _EndIndex)的元素
+	 */
+	template<int _BeginIndex, int _EndIndex>
+	struct erase
+	{
+		typedef typename left<_BeginIndex>::type
+		::append_pack<typename type::slice<_EndIndex, end::index>::type>
+		::type type;
+	};
+
+	template<int _Index>
+	using erase_at = erase<_Index, _Index + 1>;
+
+	using erase_first = erase_at<0>;
+
+	using erase_last = erase_at<size - 1>;
+
+	/**
+	 * @brief 设置指定索引的类型
+	 */
+	template<int _Index, typename _T>
+	struct put
+	{
+		typedef typename left<_Index>::type
+		::append<_T>::type
+		::append_pack<typename type::slice<_Index + 1, end::index>::type>
+		::type type;
+	};
+
+	/**
+	 * @brief 调整type_pack<>的大小，如果目标_Size小于当前则只保留前_Size个元素，如果大于当前则后面扩容的部分用_FillType进行填充
+	 */
+	template<int _Size, typename _FillType>
+	struct resize
+	{
+		typedef typename if_else<(_Size == size)>
+		::resolve_t<
+				type, //size无变化直接返回本身
+				typename if_else<(_Size > size)>
+				::resolve_t<
+						typename append_pack<typename pack_of_t<_FillType, _Size - size>::type>::type,
+						typename left<_Size>::type
+				>::type
+		>::type type;
+	};
+};
+
+/**
+ * @brief 构造一个长度为_Num且全部元素为_T的type_pack<>
+ */
+template<typename _T, int _Num>
+struct pack_of_t
+{
+	typedef typename forward_iterate<int_iterator<0>, int_iterator<_Num>, iterate_cond::append_param_type_op, iterate_cond::always, type_pack<>, _T>::type type;
 };
 
 /**
@@ -1059,7 +1317,7 @@ private:
 public:
 	typedef type_pack<_CatPacks...> packs;
 
-	typedef typename forward_iterate<typename packs::begin, typename packs::end, __cat_pack_op, iterate_cond_always, type_pack<>>::type type;
+	typedef typename forward_iterate<typename packs::begin, typename packs::end, __cat_pack_op, iterate_cond::always, type_pack<> >::type type;
 };
 
 template<typename _Value>
@@ -1087,82 +1345,6 @@ struct _switch
 			>::type type;
 		};
 	};
-};
-
-/**
- * @brief 变量或函数所属的类，如果不是成员则type为void
- */
-template<typename _T>
-struct decl_class
-{
-	typedef void type;
-};
-
-template<typename _Class, typename _T>
-struct decl_class<_T _Class::*>
-{
-	typedef _Class type;
-};
-
-/**
- * @brief 变量或函数的声明类型，声明类型将成员指针类型转换为普通类型，成员函数丢失this参数
- */
-template<typename _T>
-struct decl_type
-{
-	typedef _T type;
-};
-
-template<typename _Class, typename _T>
-struct decl_type<_T _Class::*>
-{
-	typedef _T type;
-};
-
-/**
- * @brief 可以得到指针、引用等的原本类型，即传入T*或T**甚至更高次数的指针可以得到T
- */
-template<typename _T>
-struct type_of
-{
-	typedef _T type;
-};
-
-template<typename _T>
-struct type_of<_T*>
-{
-	typedef typename type_of<_T>::type type; //递归地获取指针类型
-};
-
-template<typename _T>
-struct type_of<_T&>
-{
-	typedef _T type;
-};
-
-template<typename _T>
-struct type_of<_T&&>
-{
-	typedef _T type;
-};
-
-/**
- * @brief 包装指针的类型，_Class=void则视作非成员类型，否则视作成员类型
- */
-template<typename _Class, typename _T>
-struct ptr_type
-{
-	static const type_classification classification = to_memb_classification(type_classification_of_t<_T>::value); //_Class不为void则转换为对应的成员类型
-
-	typedef _T _Class::*type;
-};
-
-template<typename _T>
-struct ptr_type<void, _T>
-{
-	static const type_classification classification = to_orid_classification(type_classification_of_t<_T>::value);
-
-	typedef _T* type;
 };
 
 }
