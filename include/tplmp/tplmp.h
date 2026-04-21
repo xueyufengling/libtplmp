@@ -495,7 +495,7 @@ struct if_else<false>
 /**
  * @brief 类型的分类，必定是以下之一
  */
-enum type_classification : int
+enum classify_type : int
 {
 	VARIABLE, //普通变量
 	FUNCTION, //普通函数
@@ -504,81 +504,81 @@ enum type_classification : int
 	MEMB_FUNCTION, //成员函数
 };
 
-using type_classification_variable_t = __constexpr__(type_classification::VARIABLE);
-using type_classification_function_t = __constexpr__(type_classification::FUNCTION);
-using type_classification_memb_field_t = __constexpr__(type_classification::MEMB_FIELD);
-using type_classification_memb_function_t = __constexpr__(type_classification::MEMB_FUNCTION);
+using classify_type_variable_t = __constexpr__(classify_type::VARIABLE);
+using classify_type_function_t = __constexpr__(classify_type::FUNCTION);
+using classify_type_memb_field_t = __constexpr__(classify_type::MEMB_FIELD);
+using classify_type_memb_function_t = __constexpr__(classify_type::MEMB_FUNCTION);
 
 /**
  * @brief 值的种类判断
  */
 template<typename _T>
-struct type_classification_of_t
+struct classify_type_of_t
 {
-	static const type_classification value = type_classification::VARIABLE;
+	static const classify_type value = classify_type::VARIABLE;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
-struct type_classification_of_t<_RetType(_ArgTypes...)>
+struct classify_type_of_t<_RetType(_ArgTypes...)>
 {
-	static const type_classification value = type_classification::FUNCTION;
+	static const classify_type value = classify_type::FUNCTION;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
-struct type_classification_of_t<_RetType (*)(_ArgTypes...)>
+struct classify_type_of_t<_RetType (*)(_ArgTypes...)>
 {
-	static const type_classification value = type_classification::FUNCTION;
+	static const classify_type value = classify_type::FUNCTION;
 };
 
 template<typename _Class, typename _T>
-struct type_classification_of_t<_T _Class::*>
+struct classify_type_of_t<_T _Class::*>
 {
-	static const type_classification value = type_classification::MEMB_FIELD;
+	static const classify_type value = classify_type::MEMB_FIELD;
 };
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
-struct type_classification_of_t<_RetType (_Class::*)(_ArgTypes...)>
+struct classify_type_of_t<_RetType (_Class::*)(_ArgTypes...)>
 {
-	static const type_classification value = type_classification::MEMB_FUNCTION;
+	static const classify_type value = classify_type::MEMB_FUNCTION;
 };
 
 template<typename _T>
-inline constexpr type_classification type_classification_of(_T*)
+inline constexpr classify_type classify_type_of(_T*)
 {
-	return type_classification::VARIABLE;
+	return classify_type::VARIABLE;
 }
 
 template<typename _RetType, typename ... _ArgTypes>
-inline constexpr type_classification type_classification_of(_RetType (*)(_ArgTypes...))
+inline constexpr classify_type classify_type_of(_RetType (*)(_ArgTypes...))
 {
-	return type_classification::FUNCTION;
+	return classify_type::FUNCTION;
 }
 
 template<typename _Class, typename _T>
-inline constexpr type_classification type_classification_of(_T _Class::*)
+inline constexpr classify_type classify_type_of(_T _Class::*)
 {
-	return type_classification::MEMB_FIELD;
+	return classify_type::MEMB_FIELD;
 }
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
-inline constexpr type_classification type_classification_of(_RetType (_Class::*)(_ArgTypes...))
+inline constexpr classify_type classify_type_of(_RetType (_Class::*)(_ArgTypes...))
 {
-	return type_classification::MEMB_FUNCTION;
+	return classify_type::MEMB_FUNCTION;
 }
 
-inline constexpr type_classification to_orid_classification(type_classification classification)
+inline constexpr classify_type to_orid_classification(classify_type classification)
 {
-	return classification > type_classification::ORID_NUM ? (type_classification)(classification - type_classification::ORID_NUM) : classification;
+	return classification > classify_type::ORID_NUM ? (classify_type)(classification - classify_type::ORID_NUM) : classification;
 }
 
-inline constexpr type_classification to_memb_classification(type_classification classification)
+inline constexpr classify_type to_memb_classification(classify_type classification)
 {
-	return classification < type_classification::ORID_NUM ? (type_classification)(classification + type_classification::ORID_NUM) : classification;
+	return classification < classify_type::ORID_NUM ? (classify_type)(classification + classify_type::ORID_NUM) : classification;
 }
 
-inline constexpr bool is_memb_classification(type_classification classification)
+inline constexpr bool is_memb_classification(classify_type classification)
 {
-	return classification == type_classification::MEMB_FIELD || classification == type_classification::MEMB_FUNCTION;
+	return classification == classify_type::MEMB_FIELD || classification == classify_type::MEMB_FUNCTION;
 }
 
 /**
@@ -644,7 +644,7 @@ struct type_of<_T&&>
 template<typename _Class, typename _T>
 struct ptr_type
 {
-	static const type_classification classification = to_memb_classification(type_classification_of_t<_T>::value); //_Class不为void则转换为对应的成员类型
+	static const classify_type classification = to_memb_classification(classify_type_of_t<_T>::value); //_Class不为void则转换为对应的成员类型
 
 	typedef _T _Class::*type;
 };
@@ -652,7 +652,7 @@ struct ptr_type
 template<typename _T>
 struct ptr_type<void, _T>
 {
-	static const type_classification classification = to_orid_classification(type_classification_of_t<_T>::value);
+	static const classify_type classification = to_orid_classification(classify_type_of_t<_T>::value);
 
 	typedef _T* type;
 };
@@ -706,7 +706,7 @@ protected:
 		typedef invalid_type type;
 	};
 
-	template<int _Index, typename ... _RestParams>
+	template<int _Index, typename ... _Params>
 	struct __type_at_impl
 	{
 	};

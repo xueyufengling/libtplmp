@@ -66,19 +66,19 @@ protected:
 		}
 
 		template<typename _T>
-		inline constexpr typename tplmp::ptr_type<void, _T>::type cast() const
+		inline constexpr typename tplmp::ptr_type<void, _T>::type cast()
 		{
 			return __cast_impl<_T>::cast(*this);
 		}
 
 		template<typename _T>
-		inline constexpr operator typename tplmp::ptr_type<void, _T>::type() const
+		inline constexpr operator typename tplmp::ptr_type<void, _T>::type()
 		{
 			return cast<_T>();
 		}
 
 		template<typename _T>
-		inline __univptr_orid& operator=(_T *pord)
+		inline __univptr_orid& operator=(_T* pord)
 		{
 			store(pord);
 			return *this;
@@ -95,7 +95,6 @@ protected:
 	struct __univptr_memb
 	{
 		__assert_is_class__(_Class);
-
 	private:
 		union
 		{
@@ -104,13 +103,13 @@ protected:
 		};
 
 		template<typename _T>
-		inline void store(_T _Class::*pfield) const
+		inline void store(_T _Class::*pfield)
 		{
 			field = (int _Class::*)pfield;
 		}
 
 		template<typename _RetType, typename ... _ArgTypes>
-		inline void store(_RetType (_Class::*pfunc)(_ArgTypes...)) const
+		inline void store(_RetType (_Class::*pfunc)(_ArgTypes...))
 		{
 			function = (void (_Class::*)())pfunc;
 		}
@@ -148,19 +147,19 @@ protected:
 		}
 
 		template<typename _T>
-		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast() const
+		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast()
 		{
 			return __cast_impl<_T>::cast(*this);
 		}
 
 		template<typename _T>
-		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type() const
+		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type()
 		{
 			return cast();
 		}
 
 		template<typename _T>
-		inline __univptr_memb <_Class>& operator=(_T _Class::*pmemb) const
+		inline __univptr_memb <_Class>& operator=(_T _Class::*pmemb)
 		{
 			store(pmemb);
 			return *this;
@@ -172,10 +171,59 @@ protected:
  * @brief 可以存取普通变量、普通函数、成员字段、成员函数的指针类型
  */
 template<typename _Class>
-struct univptr_t: __univptr_impl_base, public if_else<type_equal<_Class, void>::value>
-		::resolve_t<
-				__univptr_impl_base:: __univptr_orid, __univptr_impl_base:: __univptr_memb <_Class>
-		>::type
+struct univptr_t: __univptr_impl_base
+{
+	union
+	{
+		__univptr_orid orid_ptr;
+		__univptr_memb <_Class> memb_ptr;
+	};
+
+	univptr_t() = default;
+
+	template<typename _T>
+	inline univptr_t(_T* pord)
+	{
+		orid_ptr = pord;
+	}
+
+	template<typename _T>
+	inline univptr_t(_T _Class::*pmemb)
+	{
+		memb_ptr = pmemb;
+	}
+
+	template<typename _T>
+	inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast()
+	{
+		return if_else<type_equal<_Class, void>::value>
+		::_return(orid_ptr.template cast<_T>(),
+				memb_ptr.template cast<_T>());
+	}
+
+	template<typename _T>
+	inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type()
+	{
+		return cast<_T>();
+	}
+
+	template<typename _T>
+	inline univptr_t<_Class>& operator=(_T* pord)
+	{
+		orid_ptr.store(pord);
+		return *this;
+	}
+
+	template<typename _T>
+	inline univptr_t<_Class>& operator=(_T _Class::*pmemb)
+	{
+		memb_ptr.store(pmemb);
+		return *this;
+	}
+};
+
+template<>
+struct univptr_t<void> : __univptr_impl_base, __univptr_impl_base::__univptr_orid
 {
 };
 
@@ -186,7 +234,6 @@ template<typename _Class>
 struct __pmemb_identifier
 {
 	__assert_is_class__(_Class); //静态断言，只有类成员可以有__access_identifier
-
 	typedef _Class decl_class; //成员所属类
 
 	__pmemb_identifier() = delete; //不能直接使用__access_identifier作为标识符，必须写一个派生类继承自本类
@@ -201,7 +248,7 @@ struct __pmemb_value
 {
 	typedef typename _pMembIdentifier::decl_class decl_class;
 
-	static tplmp::type_classification classification; //该标识符对应的类型
+	static tplmp::classify_type classification; //该标识符对应的类型
 
 	static univptr_t<decl_class> _pmemb;
 
@@ -216,7 +263,7 @@ private: //template class显式实例化可以无视访问修饰符
 		//本类只会在template class显式实例化时能访问或引用，因此必须在模板实例化时就将成员指针值传出。但在C++11没有任何办法可以在编译时传出。
 		__initializer()
 		{
-			__pmemb_value<_pMembIdentifier>::classification = tplmp::type_classification_of_t<_pMemb>::value;
+			__pmemb_value<_pMembIdentifier>::classification = tplmp::classify_type_of_t<_pMemb>::value;
 			__pmemb_value<_pMembIdentifier>::_pmemb = _pMembValue;
 		}
 
@@ -224,7 +271,7 @@ private: //template class显式实例化可以无视访问修饰符
 	};
 };
 template<typename _pMembIdentifier>
-tplmp::type_classification __pmemb_value<_pMembIdentifier>::classification = tplmp::type_classification::MEMB_FIELD;
+tplmp::classify_type __pmemb_value<_pMembIdentifier>::classification = tplmp::classify_type::MEMB_FIELD;
 
 template<typename _pMembIdentifier>
 univptr_t<typename _pMembIdentifier::decl_class> __pmemb_value<_pMembIdentifier>::_pmemb = univptr_t<typename _pMembIdentifier::decl_class>();
@@ -261,7 +308,7 @@ struct __access_identifier
 	typedef typename tplmp::ptr_type<decl_class, _MembType>::type pmemb_type; //成员指针类型
 	typedef typename tplmp::eval_type<_MembType>::type eval_type; //成员求值类型，对字段而言是声明类型，对函数而言是返回类型
 
-	static const tplmp::type_classification classification = tplmp::type_classification_of_t<pmemb_type>::value; //成员分类，判断是成员字段还是成员函数
+	static const tplmp::classify_type classification = tplmp::classify_type_of_t<pmemb_type>::value; //成员分类，判断是成员字段还是成员函数
 
 	__access_identifier() = delete;
 };
@@ -295,13 +342,13 @@ private:
 	};
 
 protected:
-	template<typename _AccessIdentifier, tplmp::type_classification _Classification>
+	template<typename _AccessIdentifier, tplmp::classify_type _Classification>
 	struct __accessor_impl
 	{
 	};
 
 	template<typename _AccessIdentifier>
-	struct __accessor_impl<_AccessIdentifier, tplmp::type_classification::MEMB_FIELD> : public __accessor_base<_AccessIdentifier>
+	struct __accessor_impl<_AccessIdentifier, tplmp::classify_type::MEMB_FIELD> : public __accessor_base<_AccessIdentifier>
 	{
 		using typename __accessor_base<_AccessIdentifier>::pmemb_identifier;
 		using typename __accessor_base<_AccessIdentifier>::decl_class;
@@ -328,7 +375,7 @@ protected:
 			return pobj->*pmemb;
 		}
 
-		__attribute__((always_inline)) inline __accessor_impl <_AccessIdentifier, tplmp::type_classification::MEMB_FIELD>& operator=(const eval_type& value)
+		__attribute__((always_inline)) inline __accessor_impl <_AccessIdentifier, tplmp::classify_type::MEMB_FIELD>& operator=(const eval_type& value)
 		{
 			pobj->*pmemb = value;
 			return *this;
@@ -357,7 +404,7 @@ protected:
 
 	//成员函数访问的实现
 	template<typename _AccessIdentifier>
-	struct __accessor_impl<_AccessIdentifier, tplmp::type_classification::MEMB_FUNCTION> : public __accessor_base<_AccessIdentifier>
+	struct __accessor_impl<_AccessIdentifier, tplmp::classify_type::MEMB_FUNCTION> : public __accessor_base<_AccessIdentifier>
 	{
 		using typename __accessor_base<_AccessIdentifier>::pmemb_identifier;
 		using typename __accessor_base<_AccessIdentifier>::decl_class;
@@ -399,10 +446,10 @@ protected:
 	};
 
 	template<typename _AccessIdentifier>
-	using field_accessor = __accessor_impl<_AccessIdentifier, tplmp::type_classification::MEMB_FIELD>;
+	using field_accessor = __accessor_impl<_AccessIdentifier, tplmp::classify_type::MEMB_FIELD>;
 
 	template<typename _AccessIdentifier>
-	using function_accessor = __accessor_impl<_AccessIdentifier, tplmp::type_classification::MEMB_FUNCTION>;
+	using function_accessor = __accessor_impl<_AccessIdentifier, tplmp::classify_type::MEMB_FUNCTION>;
 };
 
 template<typename _AccessIdentifier>
@@ -429,7 +476,7 @@ struct __accessor: public __accessor_impl_base, public __accessor_impl_base::__a
 {
 	typedef _AccessIdentifier identifier;
 
-	static constexpr tplmp::type_classification classification = identifier::classification;
+	static constexpr tplmp::classify_type classification = identifier::classification;
 
 	using typename __accessor_impl<identifier, classification>::decl_class;
 
