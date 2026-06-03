@@ -359,14 +359,13 @@ protected:
 };
 
 template<typename _T>
-struct decl: __decl_impl_base
+struct decl: __decl_impl_base, __decl_impl_base::__decl_impl<_T>
 {
-	typedef typename __decl_impl<_T>::type type;
 };
 
 // 函数类型的特化，函数类型是不可被声明的，只有函数指针可以声明，这里将函数类型转换为函数指针
 template<typename _RetType, typename ... _ArgTypes>
-struct decl<_RetType(_ArgTypes...)> : __decl_impl_base
+struct decl<_RetType(_ArgTypes...)> : __decl_impl_base, __decl_impl_base::__decl_impl<_RetType(_ArgTypes...)>
 {
 	typedef typename __decl_impl<_RetType (*)(_ArgTypes...)>::type type;
 };
@@ -714,10 +713,7 @@ protected:
 	template<int _Index, typename _First, typename ... _RestParams>
 	struct __type_at_impl<_Index, _First, _RestParams...>
 	{
-		typedef typename if_else<_Index <= 0>
-		::resolve_t<
-				type_t<_First>,
-				type_at<_Index - 1, _RestParams...> //此处不使用type_at<>::type避免实例化type_at<>
+		typedef typename if_else<_Index <= 0>::resolve_t<type_t<_First>, type_at<_Index - 1, _RestParams...> //此处不使用type_at<>::type避免实例化type_at<>
 		>::type::type type;
 	};
 
@@ -732,11 +728,7 @@ protected:
  * 		  如果_Params为空则将断言失败，索引越界。
  */
 template<int _Index, typename ... _Params>
-struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeof...(_Params))>
-		::resolve_t<
-				__type_at_impl_base:: __type_at_impl <_Index, _Params...>,
-				__type_at_impl_base:: __type_at_impl_oob
-				>::type
+struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeof...(_Params))>::resolve_t<__type_at_impl_base:: __type_at_impl <_Index, _Params...>, __type_at_impl_base:: __type_at_impl_oob >::type
 {
 };
 
@@ -815,11 +807,7 @@ protected:
  * 		  正向迭代时需要使用next进行迭代，逆向迭代时需要使用prev进行迭代
  */
 template<int _Index, typename ..._Params>
-struct iterator: __iterator_impl_base, public if_else<(_Index >= -1 && _Index <= sizeof...(_Params))>
-		::resolve_t<
-				__iterator_impl_base:: __iterator_impl <_Index, _Params...>,
-				__iterator_impl_base:: __iterator_impl_oob
-				>::type
+struct iterator: __iterator_impl_base, public if_else<(_Index >= -1 && _Index <= sizeof...(_Params))>::resolve_t<__iterator_impl_base:: __iterator_impl <_Index, _Params...>, __iterator_impl_base:: __iterator_impl_oob >::type
 {
 };
 
@@ -841,19 +829,13 @@ using rend_iterator = iterator<-1, _Params...>;
 
 //***** 迭代算法 *****
 
-template<
-		typename _BeginIter,
-		typename _EndIter,
-		template<typename, typename, typename ...> typename _Op,
+template<typename _BeginIter, typename _EndIter, template<typename, typename, typename ...> typename _Op,
 template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
 struct forward_iterate;
 
-template<
-		typename _BeginIter,
-		typename _EndIter,
-		template<typename, typename, typename ...> typename _Op,
+template<typename _BeginIter, typename _EndIter, template<typename, typename, typename ...> typename _Op,
 template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
@@ -868,10 +850,7 @@ protected:
 		typedef _Result type; //迭代未开始或提前结束时的最终结果
 	};
 
-	template<
-			typename _CurrentIter,
-			typename _EndIter,
-			template<typename, typename, typename ...> typename _Op,  //_Op是模板，模板参数中声明模板实现类型的Callable
+	template<typename _CurrentIter, typename _EndIter, template<typename, typename, typename ...> typename _Op,  //_Op是模板，模板参数中声明模板实现类型的Callable
 	template<typename, typename, typename ...> typename _Cond,//迭代进行的条件
 	typename _Result,
 	typename ..._OpParams
@@ -917,10 +896,7 @@ protected:
  * 		  _Cond必须定义static const bool iterate_next;用于决定是否迭代下一个元素，如果为false则终止迭代。
  * 		  如果在一次迭代中要返回多个值，则需要将多个值打包到_Result中。
  */
-template<
-		typename _BeginIter,
-		typename _EndIter,
-		template<typename, typename, typename ...> typename _Op,
+template<typename _BeginIter, typename _EndIter, template<typename, typename, typename ...> typename _Op,
 template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
@@ -941,10 +917,7 @@ __iterate_impl_base::__iterate_impl_end<_Result>
 /**
  * @brief 逆向迭代
  */
-template<
-		typename _BeginIter,
-		typename _EndIter,
-		template<typename, typename, typename ...> typename _Op,
+template<typename _BeginIter, typename _EndIter, template<typename, typename, typename ...> typename _Op,
 template<typename, typename, typename ...> typename _Cond,
 typename _Result,
 typename ..._OpParams>
@@ -965,8 +938,7 @@ namespace iterate_cond
 /**
  * @brief 始终迭代下一个
  */
-template<
-		typename _CurrentIter, typename _Result, typename ...>
+template<typename _CurrentIter, typename _Result, typename ...>
 struct always
 {
 	static const bool iterate_next = true;
@@ -975,8 +947,7 @@ struct always
 /**
  * @brief 始终不迭代下一个
  */
-template<
-		typename _CurrentIter, typename _Result, typename ...>
+template<typename _CurrentIter, typename _Result, typename ...>
 struct never
 {
 	static const bool iterate_next = false;
@@ -1015,9 +986,7 @@ struct until_appear_op
 {
 	static const bool equal = type_equal<typename _CurrentIter::type, _T>::value; //类内初始化为编译期内联常量，不会进入编译后的二进制文件
 
-	typedef typename if_else<(_AppearCounter::value > 0)>
-	::resolve_t<
-			typename until_appear<equal ? _AppearCounter::value - 1 : _AppearCounter::value>::appear_counter<_AppearCounter::index>, //计数不为0则减少计数，保持索引不变
+	typedef typename if_else<(_AppearCounter::value > 0)>::resolve_t<typename until_appear<equal ? _AppearCounter::value - 1 : _AppearCounter::value>::appear_counter<_AppearCounter::index>, //计数不为0则减少计数，保持索引不变
 			typename until_appear<_AppearCounter::value>::appear_counter<equal ? _CurrentIter::index : _AppearCounter::index> //计数器为0，判断当前类型是否与给定目标类型相同，相同则返回索引，不同则索引不变
 	>::type type;
 };
@@ -1048,8 +1017,7 @@ struct pack_of_t;
 /**
  * @brief 类型参数包，用于保存模板参数而不展开，对于值参数，需要使用_constexpr<>将值封装为类型
  */
-template<
-		typename ..._Params>
+template<typename ..._Params>
 struct type_pack
 {
 	/**
@@ -1159,14 +1127,7 @@ struct type_pack
 	template<typename _T, int _BeginIndex, int _EndIndex, int _Count>
 	struct find_in
 	{
-		static const int value = forward_iterate<
-				iterator_at<_BeginIndex>,
-				iterator_at<_EndIndex>,
-				iterate_cond::until_appear_op,
-				iterate_cond::until_appear_cond,
-				typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter,
-				_T
-				>::type::index;
+		static const int value = forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
 	};
 
 	template<typename _T, int _Count>
@@ -1181,14 +1142,7 @@ struct type_pack
 	template<typename _T, int _BeginIndex, int _EndIndex, int _Count>
 	struct rfind_in
 	{
-		static const int value = inverse_iterate<
-				iterator_at<_BeginIndex>,
-				iterator_at<_EndIndex>,
-				iterate_cond::until_appear_op,
-				iterate_cond::until_appear_cond,
-				typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter,
-				_T
-				>::type::index;
+		static const int value = inverse_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
 	};
 
 	template<typename _T, int _Count>
@@ -1238,10 +1192,7 @@ struct type_pack
 	template<int _InsertIndex, typename ... _InsertParames>
 	struct insert
 	{
-		typedef typename left<_InsertIndex>::type
-		::append<_InsertParames...>::type
-		::append_pack<typename type::slice<_InsertIndex, end::index>::type>
-		::type type;
+		typedef typename left<_InsertIndex>::type::append<_InsertParames...>::type::append_pack<typename type::slice<_InsertIndex, end::index>::type>::type type;
 	};
 
 	/**
@@ -1250,9 +1201,7 @@ struct type_pack
 	template<int _BeginIndex, int _EndIndex>
 	struct erase
 	{
-		typedef typename left<_BeginIndex>::type
-		::append_pack<typename type::slice<_EndIndex, end::index>::type>
-		::type type;
+		typedef typename left<_BeginIndex>::type::append_pack<typename type::slice<_EndIndex, end::index>::type>::type type;
 	};
 
 	template<int _Index>
@@ -1268,10 +1217,7 @@ struct type_pack
 	template<int _Index, typename _T>
 	struct put
 	{
-		typedef typename left<_Index>::type
-		::append<_T>::type
-		::append_pack<typename type::slice<_Index + 1, end::index>::type>
-		::type type;
+		typedef typename left<_Index>::type::append<_T>::type::append_pack<typename type::slice<_Index + 1, end::index>::type>::type type;
 	};
 
 	/**
@@ -1280,15 +1226,8 @@ struct type_pack
 	template<int _Size, typename _FillType>
 	struct resize
 	{
-		typedef typename if_else<(_Size == size)>
-		::resolve_t<
-				type, //size无变化直接返回本身
-				typename if_else<(_Size > size)>
-				::resolve_t<
-						typename append_pack<typename pack_of_t<_FillType, _Size - size>::type>::type,
-						typename left<_Size>::type
-				>::type
-		>::type type;
+		typedef typename if_else<(_Size == size)>::resolve_t<type, //size无变化直接返回本身
+				typename if_else<(_Size > size)>::resolve_t<typename append_pack<typename pack_of_t<_FillType, _Size - size>::type>::type, typename left<_Size>::type>::type>::type type;
 	};
 };
 
@@ -1335,14 +1274,7 @@ struct _switch
 		{
 			__assert_pack_size_equal__(_Cases, _Results);
 
-			typedef typename if_else<is_index_valid(value, cases::size)>
-			::resolve_t<
-					typename type_at<
-							value,
-							_Results...
-					>::type,
-					_Default
-			>::type type;
+			typedef typename if_else<is_index_valid(value, cases::size)>::resolve_t<typename type_at<value, _Results...>::type, _Default>::type type;
 		};
 	};
 };
