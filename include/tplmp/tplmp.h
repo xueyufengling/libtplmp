@@ -50,15 +50,9 @@ public:
  * @brief 左值强制类型转换
  */
 template<typename _T1, typename _T2>
-__attribute__((always_inline)) inline constexpr _T1& cast(_T2& lv)
+__attribute__((always_inline)) inline constexpr _T1& cast(const _T2& lv)
 {
-	return *(_T1*)(&lv);
-}
-
-template<typename _T1, typename _T2>
-__attribute__((always_inline)) inline constexpr _T1& cast(_T2&& rv)
-{
-	return *(_T1*)(&(const _T2&)rv);
+	return (_T1&)(lv);
 }
 
 /**
