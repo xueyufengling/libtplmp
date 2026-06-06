@@ -5,59 +5,114 @@
 
 namespace tplmp
 {
-struct __callable_retv_impl_base
+/**
+ * @brief 函数包装
+ */
+template<typename _FuncType>
+struct callable
 {
 protected:
-	template<typename _FuncType>
-	struct __callable_retv_impl_non_void
+	_FuncType _callable;
+
+public:
+	__attribute__((always_inline)) inline callable(_FuncType&& c) :
+			_callable(c)
 	{
-		_FuncType _callable;
+	}
 
-		__attribute__((always_inline)) inline __callable_retv_impl_non_void(_FuncType callable) :
-				_callable(callable)
-		{
-		}
+	template<typename ..._ArgTypes>
+	__attribute__((always_inline)) inline auto operator()(_ArgTypes&& ... args) -> decltype(_callable(args...))
+	{
+		return _callable(args...);
+	}
+};
 
-		template<typename ..._ArgTypes>
-		__attribute__((always_inline)) inline typename eval_type<_FuncType>::type operator()(_ArgTypes ... args)
+template<typename ..._BoundTypes>
+struct __bound_callable_impl_base
+{
+public:
+	typedef type_pack<_BoundTypes...> bound_types;
+
+protected:
+	template<size_t _Index>
+	struct __fetch_arg_bound_impl
+	{
+		template<typename ... _ForwardCallTypes>
+		__attribute__((always_inline)) inline static typename _const<typename bound_types::at<_Index>::type>::type&
+		value(const tuple<_BoundTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args)
 		{
-			return _callable(args...);
+			return bound_args.template at<_Index>();
 		}
 	};
 
-	template<typename _FuncType, typename _RetType, _RetType _VoidRet>
-	struct __callable_retv_impl_void
+	template<size_t _Index>
+	struct __fetch_arg_call_impl
 	{
-		_FuncType _callable;
-
-		__attribute__((always_inline)) inline __callable_retv_impl_void(_FuncType callable) :
-				_callable(callable)
+		//bound_types::template at<_Index>::type类型为placeholder<>
+		template<typename ... _ForwardCallTypes>
+		__attribute__((always_inline)) inline static typename type_pack<_ForwardCallTypes...>::at<
+				type_of<typename bound_types::template at<_Index>::type>::type::index
+		>::type
+		value(const tuple<_BoundTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args)
 		{
+			//是占位符则返回占位符索引对应的call_arg
+			return call_args.template at<type_of<typename bound_types::template at<_Index>::type>::type::index>();
 		}
+	};
 
-		template<typename ..._ArgTypes>
-		__attribute__((always_inline)) inline _RetType operator()(_ArgTypes ... args)
-		{
-			_callable(args...);
-			return _VoidRet;
-		}
+	template<size_t _Index>
+	struct fetch_arg:
+			public if_else<is_placeholder_t<typename bound_types::at<_Index>::type>::value>
+			::resolve_t<__fetch_arg_call_impl <_Index>, __fetch_arg_bound_impl <_Index> >::type
+	{
 	};
 };
 
 /**
- * @brief 将任意函数包装为带返回值的函数，防止在模板中出现void返回值作为右值。如果函数为void返回类型，则包装为返回_RetType，且其返回值为_VoidRet
+ * @brief 绑定参数的函数
  */
-template<typename _FuncType, typename _RetType, _RetType _VoidRet>
-struct __callable_retv: public __callable_retv_impl_base, public if_else<type_equal<typename eval_type<_FuncType>::type, void>::value>
-		::resolve_t<
-				__callable_retv_impl_base:: __callable_retv_impl_void <_FuncType, _RetType, _VoidRet>,
-				__callable_retv_impl_base:: __callable_retv_impl_non_void <_FuncType>
-		>::type
+template<typename _FuncType, typename ..._BoundTypes>
+struct bound_callable: public __bound_callable_impl_base<_BoundTypes...>, public callable<_FuncType>
 {
+protected:
+	using callable<_FuncType>::_callable;
+	//绑定的参数值，数量与原函数一致，参数类型要么与_FuncType对应位置类型相同，要么必须是tplmp::placeholder<>
+	tuple<_BoundTypes...> bound_args;
+
+	//利用编译器对函数的类型自动推导从type_pack<>中提取_Indexes
+	template<size_t ..._Indexes, typename ..._ForwardCallTypes>
+	__attribute__((always_inline)) inline auto __call_impl(type_pack<_size_t<_Indexes> ...>, _ForwardCallTypes&& ... call_args) -> decltype(
+			_callable(__bound_callable_impl_base<_BoundTypes...>::template fetch_arg<_Indexes>
+					::template value(bound_args, (const tuple<_ForwardCallTypes...>&)tuple<_ForwardCallTypes...> (forward<_ForwardCallTypes>(call_args)...))...
+			)
+	)
+	{
+		tuple<_ForwardCallTypes...> call_args_t(forward<_ForwardCallTypes>(call_args)...);
+		//为每个_Indexes展开一个fetch_arg<>()调用并形成参数包
+		return _callable(__bound_callable_impl_base<_BoundTypes...>::template fetch_arg<_Indexes>::template value(bound_args, call_args_t)...);
+	}
+
+public:
+	bound_callable(_FuncType&& c, _BoundTypes&& ...args) :
+			callable<_FuncType>(c), bound_args(args...)
+	{
+	}
+
+	template<typename ..._CallTypes>
+	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args) -> decltype(
+			__call_impl(typename index_sequence<size_t, 0, sizeof...(_BoundTypes)>::type(), forward<_CallTypes>(call_args)...)
+	)
+	{
+		return __call_impl(typename index_sequence<size_t, 0, sizeof...(_BoundTypes)>::type(), forward<_CallTypes>(call_args)...);
+	}
 };
 
-template<typename _FuncType>
-using callable_retv = __callable_retv<_FuncType, int, 0>;
+template<typename _FuncType, typename ..._BoundTypes>
+bound_callable<_FuncType, _BoundTypes...> bind_args(_FuncType&& c, _BoundTypes&& ...bound_args)
+{
+	//参数包bound_args是左值，直接展开所有值都变成左值，需要套一层forward函数将右值属性保留
+	return bound_callable<_FuncType, _BoundTypes...>(c, forward<_BoundTypes>(bound_args)...);
+}
 
 }
 

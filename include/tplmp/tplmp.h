@@ -1,6 +1,8 @@
 #ifndef _TPLMP_TPLMP
 #define _TPLMP_TPLMP
 
+#include <stdint.h>
+
 namespace tplmp
 {
 
@@ -50,7 +52,7 @@ public:
  * @brief 左值强制类型转换
  */
 template<typename _T1, typename _T2>
-__attribute__((always_inline)) inline constexpr _T1& cast(const _T2& lv)
+__attribute__((always_inline)) inline constexpr _T1& cast(const _T2& lv) noexcept
 {
 	return (_T1&)(lv);
 }
@@ -112,6 +114,23 @@ struct is_constexpr<_constexpr<_T, _Value>>
 {
 	typedef typename _constexpr<_T, _Value>::type type;
 	static constexpr bool value = true;
+};
+
+/**
+ * @brief 变量
+ */
+template<typename _T>
+struct variable
+{
+	typedef _T type;
+	type value;
+
+	variable() = default;
+
+	variable(const _T& value) :
+			value(value)
+	{
+	}
 };
 
 /**
@@ -188,56 +207,56 @@ using _false = _bool<false>;
  * @brief 数值类型的_constexpr<>封装，支持算术运算
  */
 #define __def_integer_constexpr__(constexpr_name, int_type)\
-		template<int_type _Value>\
-		using constexpr_name = tplmp::_constexpr<int_type, _Value>;\
-		struct constexpr_name##_impl_base\
+	template<int_type _Value>\
+	using constexpr_name = tplmp::_constexpr<int_type, _Value>;\
+	struct constexpr_name##_impl_base\
+	{\
+	protected:\
+		__operator_impl__(__add_impl, constexpr_name, int_type, +, int_type)\
+		__operator_impl__(__sub_impl, constexpr_name, int_type, -, int_type)\
+		__operator_impl__(__mul_impl, constexpr_name, int_type, *, int_type)\
+		__operator_impl__(__div_impl, constexpr_name, int_type, /, int_type)\
+		__operator_impl__(__mod_impl, constexpr_name, int_type, %, int_type)\
+	};\
+	template<int_type _Value>\
+	struct _constexpr<int_type, _Value> : constexpr_name##_impl_base\
+	{\
+		typedef int_type type;\
+		static constexpr int_type value = _Value;\
+		template<int_type ... _OpValues>\
+		struct add\
 		{\
-		protected:\
-			__operator_impl__(__add_impl, constexpr_name, int_type, +, int_type)\
-			__operator_impl__(__sub_impl, constexpr_name, int_type, -, int_type)\
-			__operator_impl__(__mul_impl, constexpr_name, int_type, *, int_type)\
-			__operator_impl__(__div_impl, constexpr_name, int_type, /, int_type)\
-			__operator_impl__(__mod_impl, constexpr_name, int_type, %, int_type)\
+			typedef typename __add_impl<_Value, _OpValues...>::type type;\
 		};\
-		template<int_type _Value>\
-		struct _constexpr<int_type, _Value> : constexpr_name##_impl_base\
+		template<int_type ... _OpValues>\
+		struct sub\
 		{\
-			typedef int_type type;\
-			static constexpr int_type value = _Value;\
-			template<int_type ... _OpValues>\
-			struct add\
-			{\
-				typedef typename __add_impl<_Value, _OpValues...>::type type;\
-			};\
-			template<int_type ... _OpValues>\
-			struct sub\
-			{\
-				typedef typename __sub_impl<_Value, _OpValues...>::type type;\
-			};\
-			struct inc\
-			{\
-				typedef typename add<1>::type type;\
-			};\
-			struct dec\
-			{\
-				typedef typename sub<1>::type type;\
-			};\
-			template<int_type ... _OpValues>\
-			struct mul\
-			{\
-				typedef typename __mul_impl<_Value, _OpValues...>::type type;\
-			};\
-			template<int_type ... _OpValues>\
-			struct div\
-			{\
-				typedef typename __div_impl<_Value, _OpValues...>::type type;\
-			};\
-			template<int_type ... _OpValues>\
-			struct mod\
-			{\
-				typedef typename __mod_impl<_Value, _OpValues...>::type type;\
-			};\
-		};
+			typedef typename __sub_impl<_Value, _OpValues...>::type type;\
+		};\
+		struct inc\
+		{\
+			typedef typename add<1>::type type;\
+		};\
+		struct dec\
+		{\
+			typedef typename sub<1>::type type;\
+		};\
+		template<int_type ... _OpValues>\
+		struct mul\
+		{\
+			typedef typename __mul_impl<_Value, _OpValues...>::type type;\
+		};\
+		template<int_type ... _OpValues>\
+		struct div\
+		{\
+			typedef typename __div_impl<_Value, _OpValues...>::type type;\
+		};\
+		template<int_type ... _OpValues>\
+		struct mod\
+		{\
+			typedef typename __mod_impl<_Value, _OpValues...>::type type;\
+		};\
+	};
 
 __def_integer_constexpr__(_char, char)
 __def_integer_constexpr__(unsigned_char, unsigned char)
@@ -250,12 +269,19 @@ __def_integer_constexpr__(unsigned_long, unsigned long)
 __def_integer_constexpr__(long_long, long long)
 __def_integer_constexpr__(unsigned_long_long, unsigned long long)
 
+#define __def_integer_constexpr_alias__(constexpr_name, int_type, alias_name)\
+	template<int_type _Value>\
+	using alias_name = tplmp::constexpr_name<_Value>;\
+
+__def_integer_constexpr_alias__(unsigned_long_long, unsigned long long, _size_t)
+
+#undef __def_integer_constexpr_alias__
 #undef __def_integer_constexpr__
 
 template<typename _IntType, _IntType _Index>
 struct integer_iterator
 {
-	static const int index = _Index;
+	static const size_t index = _Index;
 
 	typedef _constexpr<_IntType, index> type;
 
@@ -292,13 +318,14 @@ __def_integer_iterator__(long_iterator, long)
 __def_integer_iterator__(unsigned_long_iterator, unsigned long)
 __def_integer_iterator__(long_long_iterator, long long)
 __def_integer_iterator__(unsigned_long_long_iterator, unsigned long long)
+__def_integer_iterator__(size_t_iterator, size_t)
 
 #undef __def_integer_iterator__
 
 template<typename ..._Params>
 struct _sizeof
 {
-	static const int value = sizeof...(_Params);
+	static const size_t value = sizeof...(_Params);
 
 	typedef _int<value> type;
 };
@@ -320,7 +347,6 @@ struct type_equal<_T, _T>
 
 /**
  * @brief 声明变量，val()、ref()、x()函数只有声明没有定义，只能在decltype()表达式中使用
- * 		  placeholder()返回值可以用于作为参数传递协助类型推导，但不能访问
  */
 struct __decl_impl_base
 {
@@ -443,7 +469,7 @@ struct if_else<true>
 	};
 
 	template<typename _TrueReturn, typename _FalseReturn>
-	__attribute__((always_inline)) inline static constexpr _TrueReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
+	__attribute__((always_inline)) inline static constexpr _TrueReturn&& _return(_TrueReturn&& true_val, _FalseReturn&& false_val) noexcept
 	{
 		return true_val;
 	}
@@ -479,7 +505,7 @@ struct if_else<false>
 	};
 
 	template<typename _TrueReturn, typename _FalseReturn>
-	__attribute__((always_inline)) inline static constexpr _FalseReturn _return(_TrueReturn true_val, _FalseReturn false_val) noexcept
+	__attribute__((always_inline)) inline static constexpr _FalseReturn&& _return(_TrueReturn&& true_val, _FalseReturn&& false_val) noexcept
 	{
 		return false_val;
 	}
@@ -614,6 +640,12 @@ struct type_of
 };
 
 template<typename _T>
+struct type_of<const _T>
+{
+	typedef typename type_of<_T>::type type;
+};
+
+template<typename _T>
 struct type_of<_T*>
 {
 	typedef typename type_of<_T>::type type; //递归地获取指针类型
@@ -622,11 +654,95 @@ struct type_of<_T*>
 template<typename _T>
 struct type_of<_T&>
 {
-	typedef _T type;
+	typedef typename type_of<_T>::type type;
+};
+
+template<typename _T>
+struct type_of<const _T&>
+{
+	typedef typename type_of<_T>::type type;
 };
 
 template<typename _T>
 struct type_of<_T&&>
+{
+	typedef typename type_of<_T>::type type;
+};
+
+/**
+ * @brief 去除引用
+ */
+template<typename _T>
+struct no_ref
+{
+	typedef _T type;
+};
+
+// 左值引用
+template<typename _T>
+struct no_ref<_T&>
+{
+	typedef _T type;
+};
+
+// 右值引用
+template<typename _T>
+struct no_ref<_T&&>
+{
+	typedef _T type;
+};
+
+/**
+ * @brief 添加const修饰符
+ */
+template<typename _T>
+struct _const
+{
+	typedef const _T type;
+};
+
+template<typename _T>
+struct _const<const _T>
+{
+	typedef _T type;
+};
+
+/**
+ * @brief 完美转发
+ */
+//非const左值引用不能绑定右值，无法匹配本函数
+template<typename _T>
+__attribute__((always_inline)) inline constexpr _T&& forward(typename no_ref<_T>::type& v) noexcept
+{
+	return (_T&&)v;
+}
+
+//右值重载
+template<typename _T>
+__attribute__((always_inline)) inline constexpr _T&& forward(typename no_ref<_T>::type&& v) noexcept
+{
+	return (_T&&)v;
+}
+
+/**
+ * @brief 储存类型
+ */
+template<typename _T>
+struct store_type
+{
+	typedef _T type;
+};
+
+//左值保持引用
+template<typename _T>
+struct store_type<_T&>
+{
+	typedef _T& type;
+};
+
+//右值直接储存值类型而非引用
+template<typename _T>
+struct store_type<_T&&>
 {
 	typedef _T type;
 };
@@ -681,14 +797,16 @@ struct min<_constexpr<_T1, _N1>, _constexpr<_T2, _N2> >
  */
 struct invalid_type;
 
+constexpr size_t invalid_index = -1;
+
 // ***** 类型参数包 *****
 
-inline static constexpr bool is_index_valid(int idx, int length)
+inline static constexpr bool is_index_valid(size_t idx, size_t length)
 {
-	return idx >= 0 && idx < length;
+	return idx != invalid_index && idx < length;
 }
 
-template<int _Index, typename ... _Params>
+template<size_t _Index, typename ... _Params>
 struct type_at;
 
 struct __type_at_impl_base //避免外部模板类的不同实例都实例化相同的__type_at_impl<>模板，又限制外部访问
@@ -699,19 +817,19 @@ protected:
 		typedef invalid_type type;
 	};
 
-	template<int _Index, typename ... _Params>
+	template<size_t _Index, typename ... _Params>
 	struct __type_at_impl
 	{
 	};
 
-	template<int _Index, typename _First, typename ... _RestParams>
+	template<size_t _Index, typename _First, typename ... _RestParams>
 	struct __type_at_impl<_Index, _First, _RestParams...>
 	{
 		typedef typename if_else<_Index <= 0>::resolve_t<type_t<_First>, type_at<_Index - 1, _RestParams...> //此处不使用type_at<>::type避免实例化type_at<>
 		>::type::type type;
 	};
 
-	template<int _Index>
+	template<size_t _Index>
 	struct __type_at_impl<_Index> : __type_at_impl_oob
 	{
 	};
@@ -721,7 +839,7 @@ protected:
  * @brief 获取指定索引的参数类型，索引从0开始
  * 		  如果_Params为空则将断言失败，索引越界。
  */
-template<int _Index, typename ... _Params>
+template<size_t _Index, typename ... _Params>
 struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeof...(_Params))>::resolve_t<__type_at_impl_base:: __type_at_impl <_Index, _Params...>, __type_at_impl_base:: __type_at_impl_oob >::type
 {
 };
@@ -729,7 +847,7 @@ struct type_at: __type_at_impl_base, public if_else<is_index_valid(_Index, sizeo
 /**
  * @brief 类型参数包迭代器
  */
-template<int _Index, typename ..._Params>
+template<size_t _Index, typename ..._Params>
 struct iterator;
 
 struct __iterator_impl_base
@@ -738,7 +856,7 @@ protected:
 	// 超出索引且不是end迭代器的无效迭代器
 	struct __iterator_impl_oob
 	{
-		static const int index = -1;
+		static const size_t index = invalid_index;
 
 		typedef invalid_type type;
 
@@ -749,10 +867,10 @@ protected:
 		static const bool has_next = false;
 	};
 
-	template<int _Index, typename ..._Params>
+	template<size_t _Index, typename ..._Params>
 	struct __iterator_impl
 	{
-		static const int index = _Index;
+		static const size_t index = _Index;
 
 		__assert_pack_index__(index, _Params); //检查边界
 
@@ -769,7 +887,7 @@ protected:
 	template<typename ..._Params>
 	struct __iterator_impl<sizeof...(_Params), _Params...>
 	{
-		static const int index = sizeof...(_Params);
+		static const size_t index = sizeof...(_Params);
 
 		typedef invalid_type type;
 
@@ -782,9 +900,9 @@ protected:
 
 //逆向迭代时，参数包第一个元素之前的下一个迭代器，即rend迭代器
 	template<typename ..._Params>
-	struct __iterator_impl<-1, _Params...>
+	struct __iterator_impl<invalid_index, _Params...>
 	{
-		static const int index = -1;
+		static const size_t index = invalid_index;
 
 		typedef invalid_type type;
 
@@ -800,7 +918,7 @@ protected:
  * @brief 参数包类型迭代器。
  * 		  正向迭代时需要使用next进行迭代，逆向迭代时需要使用prev进行迭代
  */
-template<int _Index, typename ..._Params>
+template<size_t _Index, typename ..._Params>
 struct iterator: __iterator_impl_base, public if_else<(_Index >= -1 && _Index <= sizeof...(_Params))>::resolve_t<__iterator_impl_base:: __iterator_impl <_Index, _Params...>, __iterator_impl_base:: __iterator_impl_oob >::type
 {
 };
@@ -819,7 +937,7 @@ using rbegin_iterator = iterator<sizeof...(_Params) - 1, _Params...>;
 
 //逆向迭代终止迭代器
 template<typename ..._Params>
-using rend_iterator = iterator<-1, _Params...>;
+using rend_iterator = iterator<invalid_index, _Params...>;
 
 //***** 迭代算法 *****
 
@@ -950,20 +1068,20 @@ struct never
 /**
  * @brief 查找直到计数为0
  */
-template<int _Counter>
+template<size_t _Counter>
 struct until_appear
 {
-	template<int _CurrentIndex>
+	template<size_t _CurrentIndex>
 	struct appear_counter
 	{
-		static const int value = _Counter;
-		static const int index = _CurrentIndex;
+		static const size_t value = _Counter;
+		static const size_t index = _CurrentIndex;
 
 		typedef appear_counter<_CurrentIndex> type;
 	};
 
 	// 迭代起始的计数器
-	using begin_appear_counter = appear_counter<-1>;
+	using begin_appear_counter = appear_counter<invalid_index>;
 };
 
 template<typename _CurrentIter, typename _AppearCounter, typename _T>
@@ -1003,9 +1121,18 @@ struct append_param_type_op
 	typedef typename _CollectedPack::append<OpParams...>::type type; //在当前收集的类型的末尾添加当前迭代器的类型
 };
 
+/**
+ * @brief 迭代中收集迭代器的索引_constexpr<>类型到目标type_pack<>末尾
+ */
+template<typename _CurrentIter, typename _CollectedPack>
+struct append_iter_index_op
+{
+	typedef typename _CollectedPack::append<typename _CurrentIter::type>::type type;
+};
+
 }
 
-template<typename _T, int _Num>
+template<typename _T, size_t _Num>
 struct pack_of_t;
 
 /**
@@ -1017,7 +1144,7 @@ struct type_pack
 	/**
 	 * @brief 参数包长度
 	 */
-	static const int size = sizeof...(_Params);
+	static const size_t size = sizeof...(_Params);
 
 	typedef type_pack<_Params...> type;
 
@@ -1094,7 +1221,7 @@ struct type_pack
 	/**
 	 * @brief 指定索引的类型
 	 */
-	template<int _Index>
+	template<size_t _Index>
 	struct at
 	{
 		typedef typename type_at<_Index, _Params...>::type type;
@@ -1106,7 +1233,7 @@ struct type_pack
 	/**
 	 * @brief 指定索引的迭代器
 	 */
-	template<int _Index>
+	template<size_t _Index>
 	using iterator_at = iterator<_Index, _Params...>;
 
 	using begin = begin_iterator<_Params...>; //正向第一个元素的迭代器
@@ -1118,13 +1245,13 @@ struct type_pack
 	/**
 	 * @brief 获取索引为[_BeginIndex, _EndIndex)的类型中指定类型正向第_Count次出现时的索引
 	 */
-	template<typename _T, int _BeginIndex, int _EndIndex, int _Count>
+	template<typename _T, size_t _BeginIndex, size_t _EndIndex, size_t _Count>
 	struct find_in
 	{
-		static const int value = forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
+		static const size_t value = forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
 	};
 
-	template<typename _T, int _Count>
+	template<typename _T, size_t _Count>
 	using find = find_in<_T, begin::index, end::index, _Count>;
 
 	template<typename _T>
@@ -1133,13 +1260,13 @@ struct type_pack
 	/**
 	 * @brief 获取索引为[_BeginIndex, _EndIndex)的类型中指定类型逆向第_Count次出现时的索引
 	 */
-	template<typename _T, int _BeginIndex, int _EndIndex, int _Count>
+	template<typename _T, size_t _BeginIndex, size_t _EndIndex, size_t _Count>
 	struct rfind_in
 	{
-		static const int value = inverse_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
+		static const size_t value = inverse_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::until_appear_op, iterate_cond::until_appear_cond, typename iterate_cond::until_appear<_Count - 1>::begin_appear_counter, _T>::type::index;
 	};
 
-	template<typename _T, int _Count>
+	template<typename _T, size_t _Count>
 	using rfind = rfind_in<_T, rbegin::index, rend::index, _Count>;
 
 	template<typename _T>
@@ -1154,7 +1281,7 @@ struct type_pack
 	/**
 	 * @brief 提取索引为[_BeginIndex, _EndIndex)的数组切片
 	 */
-	template<int _BeginIndex, int _EndIndex>
+	template<size_t _BeginIndex, size_t _EndIndex>
 	struct slice
 	{
 		typedef typename forward_iterate<iterator_at<_BeginIndex>, iterator_at<_EndIndex>, iterate_cond::append_iter_type_op, iterate_cond::always, type_pack<> >::type type;
@@ -1171,19 +1298,19 @@ struct type_pack
 	/**
 	 * @brief 左侧_Num个类型
 	 */
-	template<int _Num>
+	template<size_t _Num>
 	using left = slice<begin::index, _Num>;
 
 	/**
 	 * @brief 右侧_Num个类型
 	 */
-	template<int _Num>
+	template<size_t _Num>
 	using right = slice<size - _Num, end::index>;
 
 	/**
 	 * @brief 在_InsertIndex处插入新类型
 	 */
-	template<int _InsertIndex, typename ... _InsertParames>
+	template<size_t _InsertIndex, typename ... _InsertParames>
 	struct insert
 	{
 		typedef typename left<_InsertIndex>::type::append<_InsertParames...>::type::append_pack<typename type::slice<_InsertIndex, end::index>::type>::type type;
@@ -1192,13 +1319,13 @@ struct type_pack
 	/**
 	 * @brief 移除索引为[_BeginIndex, _EndIndex)的元素
 	 */
-	template<int _BeginIndex, int _EndIndex>
+	template<size_t _BeginIndex, size_t _EndIndex>
 	struct erase
 	{
 		typedef typename left<_BeginIndex>::type::append_pack<typename type::slice<_EndIndex, end::index>::type>::type type;
 	};
 
-	template<int _Index>
+	template<size_t _Index>
 	using erase_at = erase<_Index, _Index + 1>;
 
 	using erase_first = erase_at<0>;
@@ -1208,7 +1335,7 @@ struct type_pack
 	/**
 	 * @brief 设置指定索引的类型
 	 */
-	template<int _Index, typename _T>
+	template<size_t _Index, typename _T>
 	struct put
 	{
 		typedef typename left<_Index>::type::append<_T>::type::append_pack<typename type::slice<_Index + 1, end::index>::type>::type type;
@@ -1217,7 +1344,7 @@ struct type_pack
 	/**
 	 * @brief 调整type_pack<>的大小，如果目标_Size小于当前则只保留前_Size个元素，如果大于当前则后面扩容的部分用_FillType进行填充
 	 */
-	template<int _Size, typename _FillType>
+	template<size_t _Size, typename _FillType>
 	struct resize
 	{
 		typedef typename if_else<(_Size == size)>::resolve_t<type, //size无变化直接返回本身
@@ -1228,10 +1355,10 @@ struct type_pack
 /**
  * @brief 构造一个长度为_Num且全部元素为_T的type_pack<>
  */
-template<typename _T, int _Num>
+template<typename _T, size_t _Num>
 struct pack_of_t
 {
-	typedef typename forward_iterate<int_iterator<0>, int_iterator<_Num>, iterate_cond::append_param_type_op, iterate_cond::always, type_pack<>, _T>::type type;
+	typedef typename forward_iterate<size_t_iterator<0>, size_t_iterator<_Num>, iterate_cond::append_param_type_op, iterate_cond::always, type_pack<>, _T>::type type;
 };
 
 /**
@@ -1253,6 +1380,148 @@ public:
 	typedef typename forward_iterate<typename packs::begin, typename packs::end, __cat_pack_op, iterate_cond::always, type_pack<> >::type type;
 };
 
+/**
+ * 连续的索引数列生成
+ */
+template<typename _IntType, _IntType _Start, _IntType _Num>
+struct index_sequence
+{
+	typedef typename forward_iterate<integer_iterator<_IntType, _Start>, integer_iterator<_IntType, _Start + _Num>, iterate_cond::append_iter_index_op, iterate_cond::always, type_pack<> >::type type;
+};
+
+/**
+ * @brief 元组
+ */
+struct __tuple_impl_base
+{
+protected:
+	template<size_t _Index>
+	struct __at_impl;
+
+	template<size_t _Index>
+	struct __at_const_impl;
+};
+
+template<typename ..._Types>
+struct tuple;
+
+template<>
+struct tuple<>
+{
+};
+
+template<typename _FirstType, typename ... _RestTypes>
+struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
+{
+	_FirstType front_elem;
+	tuple<_RestTypes...> back_elems;
+
+	tuple() = default;
+	tuple(const _FirstType& first, const _RestTypes& ... rest)
+	:
+			front_elem(first), back_elems(rest...)
+	{
+	}
+
+	//索引越界会在auto -> decltype()推导过程中报错，不会触发函数体内的静态断言！
+	//需要人工保证不越界
+	template<size_t _Index>
+	auto at() -> decltype(__at_impl<_Index>::template value(*(tuple<_FirstType, _RestTypes...>*)(nullptr)))
+	{
+		return __at_impl<_Index>::template value(*this);
+	}
+
+	template<size_t _Index>
+	auto at() const -> decltype(__at_const_impl<_Index>::template value(*(tuple<_FirstType, _RestTypes...>*)(nullptr)))
+	{
+		return __at_const_impl<_Index>::template value(*this);
+	}
+};
+
+template<size_t _Index>
+struct __tuple_impl_base::__at_impl
+{
+	template<typename _AtFirst, typename ... _AtRest>
+	static auto value(tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_impl<_Index - 1>::template value(t.back_elems))
+	{
+		return __at_impl<_Index - 1>::template value(t.back_elems);
+	}
+};
+
+/**
+ * at()递归终止条件，索引=0
+ */
+template<>
+struct __tuple_impl_base::__at_impl<0>
+{
+	template<typename _AtFirst, typename ... _AtRest>
+	static _AtFirst& value(tuple<_AtFirst, _AtRest...>& t)
+	{
+		return t.front_elem;
+	}
+};
+
+template<size_t _Index>
+struct __tuple_impl_base::__at_const_impl
+{
+	template<typename _AtFirst, typename ... _AtRest>
+	static auto value(const tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_const_impl<_Index - 1>::template value(t.back_elems))
+	{
+		return __at_const_impl<_Index - 1>::template value(t.back_elems);
+	}
+};
+
+template<>
+struct __tuple_impl_base::__at_const_impl<0>
+{
+	template<typename _AtFirst, typename ... _AtRest>
+	static const _AtFirst& value(const tuple<_AtFirst, _AtRest...>& t)
+	{
+		return t.front_elem;
+	}
+};
+
+/**
+ * @brief 占位符
+ */
+template<size_t _Index>
+struct placeholder
+{
+	static constexpr size_t index = _Index;
+
+	/**
+	 * @brief 占位符的值
+	 */
+	static const placeholder<_Index> value;
+};
+
+template<size_t _Index>
+const placeholder<_Index> placeholder<_Index>::value{};
+
+template<typename _T>
+struct __is_placeholder_impl
+{
+	static constexpr bool value = false;
+};
+
+template<size_t _Index>
+struct __is_placeholder_impl<placeholder<_Index> >
+{
+	static constexpr bool value = true;
+};
+
+template<typename _T>
+struct is_placeholder_t
+{
+	static constexpr bool value = __is_placeholder_impl<typename type_of<_T>::type>::value;
+};
+
+template<typename _T>
+constexpr bool is_placeholder(_T)
+{
+	return __is_placeholder_impl<typename type_of<_T>::type>::value;
+}
+
 template<typename _Value>
 struct _switch
 {
@@ -1261,7 +1530,7 @@ struct _switch
 	{
 		typedef type_pack<_Cases...> cases;
 
-		static const int value = cases::template find_first<_Value>::value;
+		static const size_t value = cases::template find_first<_Value>::value;
 
 		template<typename _Default, typename ... _Results>
 		struct resolve_t
