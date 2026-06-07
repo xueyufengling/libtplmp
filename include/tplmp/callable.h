@@ -136,17 +136,17 @@ struct __bound_args_callable_impl: public __bound_args_callable_impl_base<_Bound
 		return _callable(__bound_args_callable_impl_base<_BoundArgTypes...>::template fetch_arg<_Indexes>::template value(bound_args, call_args_t)...);
 	}
 
-	__bound_args_callable_impl(_BoundArgTypes&& ...args) :
+	__attribute__((always_inline)) inline __bound_args_callable_impl(_BoundArgTypes&& ...args) :
 			bound_args(args...)
 	{
 	}
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) -> decltype(
-			__call_impl(_callable, typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...)
+			__call_impl(forward<_FuncType>(_callable), typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...)
 	)
 	{
-		return __call_impl(_callable, typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...);
+		return __call_impl(forward<_FuncType>(_callable), typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...);
 	}
 };
 
@@ -160,7 +160,7 @@ struct __bound_ret_callable_impl
 
 	typedef _BoundRetType ret_type;
 
-	__bound_ret_callable_impl(_BoundRetType&& ret) :
+	__attribute__((always_inline)) inline __bound_ret_callable_impl(_BoundRetType&& ret) :
 			bound_ret(ret)
 	{
 	}
@@ -202,7 +202,7 @@ struct bound_callable:
 	using callable<_FuncType>::_callable;
 
 	bound_callable(_FuncType&& c, _BoundRetType&& ret, _BoundArgTypes&& ...args) :
-			callable<_FuncType>(c),
+			callable<_FuncType>(forward<_FuncType>(c)),
 					__bound_ret_callable_impl<_FuncType, _BoundRetType>(forward<_BoundRetType>(ret)),
 					__bound_args_callable_impl<_FuncType, _BoundArgTypes...>(forward<_BoundArgTypes>(args)...)
 	{
@@ -212,7 +212,7 @@ struct bound_callable:
 	__attribute__((always_inline)) inline _BoundRetType operator()(_CallTypes&& ... call_args)
 	{
 		//参数包call_args是左值，直接展开所有值都变成左值，需要套一层forward函数将右值属性保留
-		__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(_callable, forward<_CallTypes>(call_args)...);
+		__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
 		return __bound_ret_callable_impl<_FuncType, _BoundRetType>::bound_ret;
 	}
 };
@@ -225,7 +225,7 @@ struct bound_callable<_FuncType, void, _BoundArgTypes...> :
 	using callable<_FuncType>::_callable;
 
 	bound_callable(_FuncType&& c, _BoundArgTypes&& ...args) :
-			callable<_FuncType>(c),
+			callable<_FuncType>(forward<_FuncType>(c)),
 					__bound_args_callable_impl<_FuncType, _BoundArgTypes...>(forward<_BoundArgTypes>(args)...)
 	{
 	}
@@ -233,7 +233,7 @@ struct bound_callable<_FuncType, void, _BoundArgTypes...> :
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline void operator()(_CallTypes&& ... call_args)
 	{
-		__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(_callable, forward<_CallTypes>(call_args)...);
+		__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
 	}
 };
 
@@ -245,23 +245,23 @@ struct bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...> :
 	using callable<_FuncType>::_callable;
 
 	bound_callable(_FuncType&& c, _BoundArgTypes&& ...args) :
-			callable<_FuncType>(c),
+			callable<_FuncType>(forward<_FuncType>(c)),
 					__bound_args_callable_impl<_FuncType, _BoundArgTypes...>(forward<_BoundArgTypes>(args)...)
 	{
 	}
 
 	//添加一个const placeholder_ret&省略参数，与bound_callable<_FuncType, _BoundRetType, ._BoundArgTypes...>构造函数保持同一形式，如此可以统一调用
 	__attribute__((always_inline)) inline bound_callable(_FuncType&& c, const placeholder_ret&, _BoundArgTypes&& ...args) :
-			bound_callable(c, forward<_BoundArgTypes>(args)...)
+			bound_callable(forward<_FuncType>(c), forward<_BoundArgTypes>(args)...)
 	{
 	}
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args) -> decltype(
-			__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(_callable, forward<_CallTypes>(call_args)...)
+			__bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...)
 	)
 	{
-		return __bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(_callable, forward<_CallTypes>(call_args)...);
+		return __bound_args_callable_impl<_FuncType, _BoundArgTypes...>::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
 	}
 };
 
@@ -279,7 +279,7 @@ struct bound_callable<_FuncType, _BoundRetType> :
 	using callable<_FuncType>::_callable;
 
 	bound_callable(_FuncType&& c, _BoundRetType&& ret) :
-			callable<_FuncType>(c),
+			callable<_FuncType>(forward<_FuncType>(c)),
 					__bound_ret_callable_impl<_FuncType, _BoundRetType>(forward<_BoundRetType>(ret))
 	{
 	}
@@ -287,32 +287,32 @@ struct bound_callable<_FuncType, _BoundRetType> :
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline _BoundRetType operator()(_CallTypes&& ... call_args)
 	{
-		return __bound_ret_callable_impl<_FuncType, _BoundRetType>::call(_callable, forward<_CallTypes>(call_args)...);
+		return __bound_ret_callable_impl<_FuncType, _BoundRetType>::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
 	}
 };
 
 template<typename _FuncType, typename ..._BoundArgTypes>
-bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...> bind_args(_FuncType&& c, _BoundArgTypes&& ...bound_args)
+inline bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...> bind_args(_FuncType&& c, _BoundArgTypes&& ...bound_args)
 {
-	return bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...>(c, forward<_BoundArgTypes>(bound_args)...);
+	return bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...>(forward<_FuncType>(c), forward<_BoundArgTypes>(bound_args)...);
 }
 
 template<typename _FuncType, typename _BoundRetType>
-bound_callable<_FuncType, _BoundRetType> bind_ret(_FuncType&& c, _BoundRetType&& bound_ret)
+inline bound_callable<_FuncType, _BoundRetType> bind_ret(_FuncType&& c, _BoundRetType&& bound_ret)
 {
-	return bound_callable<_FuncType, _BoundRetType>(c, forward<_BoundRetType>(bound_ret));
+	return bound_callable<_FuncType, _BoundRetType>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret));
 }
 
 template<typename _FuncType>
-bound_callable<_FuncType, void> bind_ret(_FuncType&& c)
+inline bound_callable<_FuncType, void> bind_ret(_FuncType&& c)
 {
-	return bound_callable<_FuncType, void>(c);
+	return bound_callable<_FuncType, void>(forward<_FuncType>(c));
 }
 
 template<typename _FuncType, typename _BoundRetType, typename ..._BoundArgTypes>
-bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...> bind(_FuncType&& c, _BoundRetType&& bound_ret, _BoundArgTypes&& ...bound_args)
+inline bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...> bind(_FuncType&& c, _BoundRetType&& bound_ret, _BoundArgTypes&& ...bound_args)
 {
-	return bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...>(c, forward<_BoundRetType>(bound_ret), forward<_BoundArgTypes>(bound_args)...);
+	return bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret), forward<_BoundArgTypes>(bound_args)...);
 }
 
 }
