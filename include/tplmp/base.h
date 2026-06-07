@@ -48,6 +48,8 @@ public:
 
 #define __assert_not_impl__(type_or_value) static_assert(false, "specialization of '" #type_or_value "' not implemented")
 
+#define __crtp_this__(derived_type) ((derived_type*)this)
+
 /**
  * @brief 左值强制类型转换
  */
@@ -634,39 +636,39 @@ struct decl_type<_T _Class::*>
  * @brief 可以得到指针、引用等的原本类型，即传入T*或T**甚至更高次数的指针可以得到T
  */
 template<typename _T>
-struct type_of
+struct decay_type
 {
 	typedef _T type;
 };
 
 template<typename _T>
-struct type_of<const _T>
+struct decay_type<const _T>
 {
-	typedef typename type_of<_T>::type type;
+	typedef typename decay_type<_T>::type type;
 };
 
 template<typename _T>
-struct type_of<_T*>
+struct decay_type<_T*>
 {
-	typedef typename type_of<_T>::type type; //递归地获取指针类型
+	typedef typename decay_type<_T>::type type; //递归地获取指针类型
 };
 
 template<typename _T>
-struct type_of<_T&>
+struct decay_type<_T&>
 {
-	typedef typename type_of<_T>::type type;
+	typedef typename decay_type<_T>::type type;
 };
 
 template<typename _T>
-struct type_of<const _T&>
+struct decay_type<const _T&>
 {
-	typedef typename type_of<_T>::type type;
+	typedef typename decay_type<_T>::type type;
 };
 
 template<typename _T>
-struct type_of<_T&&>
+struct decay_type<_T&&>
 {
-	typedef typename type_of<_T>::type type;
+	typedef typename decay_type<_T>::type type;
 };
 
 /**
@@ -709,6 +711,7 @@ struct _const<const _T>
 
 /**
  * @brief 完美转发
+ * 模板参数必须显示指定，因参数是依赖_T的类型，无法根据参数反推_T
  */
 //非const左值引用不能绑定右值，无法匹配本函数
 template<typename _T>
@@ -1388,139 +1391,6 @@ struct index_sequence
 {
 	typedef typename forward_iterate<integer_iterator<_IntType, _Start>, integer_iterator<_IntType, _Start + _Num>, iterate_cond::append_iter_index_op, iterate_cond::always, type_pack<> >::type type;
 };
-
-/**
- * @brief 元组
- */
-struct __tuple_impl_base
-{
-protected:
-	template<size_t _Index>
-	struct __at_impl;
-
-	template<size_t _Index>
-	struct __at_const_impl;
-};
-
-template<typename ..._Types>
-struct tuple;
-
-template<>
-struct tuple<>
-{
-};
-
-template<typename _FirstType, typename ... _RestTypes>
-struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
-{
-	_FirstType front_elem;
-	tuple<_RestTypes...> back_elems;
-
-	tuple() = default;
-	tuple(const _FirstType& first, const _RestTypes& ... rest)
-	:
-			front_elem(first), back_elems(rest...)
-	{
-	}
-
-	//索引越界会在auto -> decltype()推导过程中报错，不会触发函数体内的静态断言！
-	//需要人工保证不越界
-	template<size_t _Index>
-	auto at() -> decltype(__at_impl<_Index>::template value(*(tuple<_FirstType, _RestTypes...>*)(nullptr)))
-	{
-		return __at_impl<_Index>::template value(*this);
-	}
-
-	template<size_t _Index>
-	auto at() const -> decltype(__at_const_impl<_Index>::template value(*(tuple<_FirstType, _RestTypes...>*)(nullptr)))
-	{
-		return __at_const_impl<_Index>::template value(*this);
-	}
-};
-
-template<size_t _Index>
-struct __tuple_impl_base::__at_impl
-{
-	template<typename _AtFirst, typename ... _AtRest>
-	static auto value(tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_impl<_Index - 1>::template value(t.back_elems))
-	{
-		return __at_impl<_Index - 1>::template value(t.back_elems);
-	}
-};
-
-/**
- * at()递归终止条件，索引=0
- */
-template<>
-struct __tuple_impl_base::__at_impl<0>
-{
-	template<typename _AtFirst, typename ... _AtRest>
-	static _AtFirst& value(tuple<_AtFirst, _AtRest...>& t)
-	{
-		return t.front_elem;
-	}
-};
-
-template<size_t _Index>
-struct __tuple_impl_base::__at_const_impl
-{
-	template<typename _AtFirst, typename ... _AtRest>
-	static auto value(const tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_const_impl<_Index - 1>::template value(t.back_elems))
-	{
-		return __at_const_impl<_Index - 1>::template value(t.back_elems);
-	}
-};
-
-template<>
-struct __tuple_impl_base::__at_const_impl<0>
-{
-	template<typename _AtFirst, typename ... _AtRest>
-	static const _AtFirst& value(const tuple<_AtFirst, _AtRest...>& t)
-	{
-		return t.front_elem;
-	}
-};
-
-/**
- * @brief 占位符
- */
-template<size_t _Index>
-struct placeholder
-{
-	static constexpr size_t index = _Index;
-
-	/**
-	 * @brief 占位符的值
-	 */
-	static const placeholder<_Index> value;
-};
-
-template<size_t _Index>
-const placeholder<_Index> placeholder<_Index>::value{};
-
-template<typename _T>
-struct __is_placeholder_impl
-{
-	static constexpr bool value = false;
-};
-
-template<size_t _Index>
-struct __is_placeholder_impl<placeholder<_Index> >
-{
-	static constexpr bool value = true;
-};
-
-template<typename _T>
-struct is_placeholder_t
-{
-	static constexpr bool value = __is_placeholder_impl<typename type_of<_T>::type>::value;
-};
-
-template<typename _T>
-constexpr bool is_placeholder(_T)
-{
-	return __is_placeholder_impl<typename type_of<_T>::type>::value;
-}
 
 template<typename _Value>
 struct _switch

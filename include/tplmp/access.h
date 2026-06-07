@@ -1,7 +1,7 @@
 #ifndef _TPLMP_ACCESS
 #define _TPLMP_ACCESS
 
-#include <tplmp/tplmp.h>
+#include <tplmp/base.h>
 
 namespace tplmp
 {

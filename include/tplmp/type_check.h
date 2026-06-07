@@ -1,7 +1,7 @@
 #ifndef _TPLMP_TYPECHECK
 #define _TPLMP_TYPECHECK
 
-#include <tplmp/tplmp.h>
+#include <tplmp/base.h>
 
 namespace tplmp
 {
