@@ -51,6 +51,18 @@ public:
 #define __crtp_this__(derived_type) ((derived_type*)this)
 
 /**
+ * @brief 空结构体，可用作继承占位符
+ * @param size_t 仅仅是占位符，用于区分不同的空结构体。例如在继承时同一个派生类不能多次继承同一个基类，此时需要人工区分保证过编译
+ */
+template<size_t = 0>
+struct empty
+{
+	inline empty(...)
+	{
+	}
+};
+
+/**
  * @brief 左值强制类型转换
  */
 template<typename _T1, typename _T2>
@@ -464,11 +476,19 @@ struct if_else<true>
 		typedef typename _TrueTypeHolder::type::type type;
 	};
 
-	template<typename _T>
-	struct enable
+	/**
+	 * @brief 作用同std::enable_if<>
+	 * if_else<_Cond>::def<_T>中，_Cond或_T必须至少有一个依赖于SFINAE候选模板的模板参数，强制编译器类型推导。
+	 * 如果两个参数都不依赖于候选模板的模板参数，则def<>的类型是完全确定的无需推导，此时_Cond为false将直接导致编译硬错误。
+	 */
+	template<typename _T = void>
+	struct __def_impl
 	{
 		typedef _T type;
 	};
+
+	template<typename _T = void>
+	using def = typename __def_impl<_T>::type;
 
 	template<typename _TrueReturn, typename _FalseReturn>
 	__attribute__((always_inline)) inline static constexpr _TrueReturn&& _return(_TrueReturn&& true_val, _FalseReturn&& false_val) noexcept
@@ -501,10 +521,13 @@ struct if_else<false>
 		typedef typename _FalseTypeHolder::type::type type;
 	};
 
-	template<typename _T>
-	struct enable
+	template<typename _T = void>
+	struct __def_impl
 	{
 	};
+
+	template<typename _T = void>
+	using def = typename __def_impl<_T>::type;
 
 	template<typename _TrueReturn, typename _FalseReturn>
 	__attribute__((always_inline)) inline static constexpr _FalseReturn&& _return(_TrueReturn&& true_val, _FalseReturn&& false_val) noexcept
@@ -922,7 +945,11 @@ protected:
  * 		  正向迭代时需要使用next进行迭代，逆向迭代时需要使用prev进行迭代
  */
 template<size_t _Index, typename ..._Params>
-struct iterator: __iterator_impl_base, public if_else<(_Index >= -1 && _Index <= sizeof...(_Params))>::resolve_t<__iterator_impl_base:: __iterator_impl <_Index, _Params...>, __iterator_impl_base:: __iterator_impl_oob >::type
+struct iterator: __iterator_impl_base, public if_else<(_Index >= -1 && _Index <= sizeof...(_Params))>
+		::resolve_t<
+				__iterator_impl_base:: __iterator_impl <_Index, _Params...>,
+				__iterator_impl_base:: __iterator_impl_oob
+				>::type
 {
 };
 
