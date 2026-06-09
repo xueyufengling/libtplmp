@@ -175,7 +175,7 @@ struct __bound_args_callable_impl: public __bound_args_callable_impl_base<_Bound
 
 	//利用编译器对函数的类型自动推导从type_pack<>中提取_Indexes
 	template<size_t ..._Indexes, typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& _callable, type_pack<_size_t<_Indexes> ...>, _CallTypes&& ... call_args) const -> decltype(
+	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& _callable, size_t_sequence<_Indexes ...>, _CallTypes&& ... call_args) const -> decltype(
 			_callable(__bound_args_callable_impl_base<_BoundArgTypes...>::template fetch_arg<_Indexes>
 					::template value(bound_args, decl<tuple<_CallTypes...> >::ref())...
 			)
@@ -188,10 +188,10 @@ struct __bound_args_callable_impl: public __bound_args_callable_impl_base<_Bound
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) const -> decltype(
-			__call_impl(forward<_FuncType>(_callable), typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...)
+			__call_impl(forward<_FuncType>(_callable), index_sequence_t<size_t, 0, sizeof...(_BoundArgTypes)>(), forward<_CallTypes>(call_args)...)
 	)
 	{
-		return __call_impl(forward<_FuncType>(_callable), typename index_sequence<size_t, 0, sizeof...(_BoundArgTypes)>::type(), forward<_CallTypes>(call_args)...);
+		return __call_impl(forward<_FuncType>(_callable), index_sequence_t<size_t, 0, sizeof...(_BoundArgTypes)>(), forward<_CallTypes>(call_args)...);
 	}
 };
 

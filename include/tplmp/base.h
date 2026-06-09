@@ -1419,6 +1419,23 @@ struct index_sequence
 	typedef typename forward_iterate<integer_iterator<_IntType, _Start>, integer_iterator<_IntType, _Start + _Num>, iterate_cond::append_iter_index_op, iterate_cond::always, type_pack<> >::type type;
 };
 
+template<typename _IntType, _IntType _Start, _IntType _Num>
+using index_sequence_t = typename index_sequence<_IntType, _Start, _Num>::type;
+
+template<size_t ..._Indexes>
+using size_t_sequence = type_pack<_size_t<_Indexes> ...>;
+
+/**
+ * (expr, 0)是逗号表达式，将从左至右依次计算值，最后一个值是返回值，这里返回值无用故直接设0。expr必须是能展开的参数包表达式。
+ * 这样会在函数体内初始化一个int expr_eval[]数组，该数组无实际作用，仅用于expr_eval[]初始化时对expr求值。在开启优化时，init_expr[]将直接优化只保留赋值语句。
+ * 如果展开过多导致生成二进制码容量超过CPU cache line容量，则展开是负优化。
+ */
+#define __eval_pack_expr__(eval_name, expr)\
+	{\
+		int eval_name[] = {(expr, 0)...};\
+		(void)eval_name;\
+	}
+
 template<typename _Value>
 struct _switch
 {
