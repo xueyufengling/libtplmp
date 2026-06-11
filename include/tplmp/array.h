@@ -7,14 +7,14 @@ namespace tplmp
 {
 
 /**
- * @brief 子定长数组引用
+ * @brief [begin, begin + _Length)子定长数组引用
  */
 //@formatter:off
-template<size_t _Begin, size_t _End, typename _T, size_t _Size>
-inline constexpr _T (& slice(_T (&arr)[_Size]))[_End - _Begin]
+template<size_t _Length, typename _T, size_t _Size>
+inline constexpr _T (& slice(_T (&arr)[_Size], size_t begin))[_Length]
 {
-	static_assert(is_index_valid(_Begin, _Size) && is_index_valid(_End, _Size) && _Begin <= _End, "invalid begin and end index");
-	return (_T (&)[_End - _Begin])*(((_T*)&arr) + _Begin);
+	static_assert(_Length >= 0, "invalid slice size");
+	return (_T (&)[_Length])*(((_T*)&arr) + begin);
 }
 //@formatter:on
 template<
