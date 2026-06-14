@@ -1456,6 +1456,15 @@ struct _switch
 	};
 };
 
+/**
+ * @brief 可调用对象返回值类型
+ */
+template<typename _Callable, typename ..._ArgTypes>
+struct callable_ret
+{
+	typedef decltype(decl<_Callable>::val()(decl<_ArgTypes>::val()...)) type;
+};
+
 }
 
 #endif //_TPLMP_TPLMP
