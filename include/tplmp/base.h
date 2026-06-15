@@ -51,6 +51,22 @@ public:
 #define __crtp_this__(derived_type) ((derived_type*)this)
 
 /**
+ * @brief 字符串化
+ */
+#define __str_intl__(...) #__VA_ARGS__
+#define __str__(...) __str_intl__(__VA_ARGS__)
+
+#define __pragma__(...) _Pragma(__str__(__VA_ARGS__))
+
+#ifdef __GNUC__
+#define __loop_unroll__(n) __pragma__(GCC unroll n)
+#elif defined(__clang__)
+#define __loop_unroll__(n) __pragma__(unroll n)
+#else
+#define __loop_unroll__(n)
+#endif
+
+/**
  * @brief 空结构体，可用作继承占位符
  * @param size_t 仅仅是占位符，用于区分不同的空结构体。例如在继承时同一个派生类不能多次继承同一个基类，此时需要人工区分保证过编译
  */
