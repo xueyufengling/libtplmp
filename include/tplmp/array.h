@@ -13,7 +13,7 @@ namespace tplmp
 template<size_t _Length, typename _T, size_t _Size>
 inline constexpr _T (& slice(_T (&arr)[_Size], size_t begin))[_Length]
 {
-	static_assert(_Length >= 0, "invalid slice size");
+	static_assert(_Length >= 0 && _Length <= _Size, "invalid slice size");
 	return (_T (&)[_Length])*(((_T*)&arr) + begin);
 }
 //@formatter:on
@@ -22,7 +22,7 @@ size_t _Index,
 typename _FirstType, typename ..._RestTypes>
 struct __at_impl
 {
-	inline static _FirstType value(_FirstType first, _RestTypes ...rest)
+	inline static auto value(_FirstType first, _RestTypes ...rest) -> decltype(__at_impl<_Index, _RestTypes...>::value(rest...))
 	{
 		return __at_impl<_Index, _RestTypes...>::value(rest...);
 	}
@@ -38,7 +38,7 @@ struct __at_impl<0, _FirstType, _RestTypes...>
 };
 
 /**
- * @brief 函数模板变长实参包取值
+ * @brief 模板变长实参包取值
  */
 template<size_t _Index, typename ... _ParamTypes>
 inline auto at(_ParamTypes ...params) -> decltype(__at_impl<_Index, _ParamTypes...>::value(params...))

@@ -1427,7 +1427,34 @@ public:
 };
 
 /**
- * 连续的索引数列生成
+ * _constexpr<>类型序列，需要通过偏特化接收type_pack<_constexpr<_Type, _Values> ...>类型参数，从该type_pack<>类型参数还原成_Type ..._Values
+ */
+template<typename _Type, _Type ..._Values>
+using constexpr_sequence = type_pack<_constexpr<_Type, _Values> ...>;
+
+#define __def_constexpr_sequence__(constexpr_name, type)\
+template<type ..._Indexes>\
+using constexpr_name##_sequence = tplmp::constexpr_sequence<type, _Indexes...>;
+
+__def_constexpr_sequence__(int, int)
+__def_constexpr_sequence__(size_t, size_t)
+
+#define __def_pack_at__(type_name, type)\
+template<size_t _Index, type _First, type ... _Rest>\
+struct type_name##_at\
+{\
+	static constexpr type value = type_name##_at<_Index - 1, _Rest...>::value;\
+};\
+template<size_t _First, type ... _Rest>\
+struct type_name##_at<0, _First, _Rest...>\
+{\
+	static constexpr type value = _First;\
+};
+
+__def_pack_at__(size_t, size_t)
+
+/**
+ * 连续的索引数列生成，其结果type本质也是个constexpr_sequence
  */
 template<typename _IntType, _IntType _Start, _IntType _Num>
 struct index_sequence
@@ -1437,9 +1464,6 @@ struct index_sequence
 
 template<typename _IntType, _IntType _Start, _IntType _Num>
 using index_sequence_t = typename index_sequence<_IntType, _Start, _Num>::type;
-
-template<size_t ..._Indexes>
-using size_t_sequence = type_pack<_size_t<_Indexes> ...>;
 
 /**
  * (expr, 0)是逗号表达式，将从左至右依次计算值，最后一个值是返回值，这里返回值无用故直接设0。expr必须是能展开的参数包表达式。
