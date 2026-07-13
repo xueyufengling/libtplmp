@@ -53,11 +53,14 @@ public:
 /**
  * @brief 字符串化
  */
-#define __str_intl__(...) #__VA_ARGS__
-#define __str__(...) __str_intl__(__VA_ARGS__)
+#define __tplmp_str_intl__(...) #__VA_ARGS__
+#define __tplmp_str__(...) __tplmp_str_intl__(__VA_ARGS__)
 
-#define __pragma__(...) _Pragma(__str__(__VA_ARGS__))
+#define __pragma__(...) _Pragma(__tplmp_str__(__VA_ARGS__))
 
+/**
+ * @brief 提示编译期展开循环
+ */
 #ifdef __GNUC__
 #define __loop_unroll__(n) __pragma__(GCC unroll n)
 #elif defined(__clang__)
@@ -451,6 +454,12 @@ struct eval_type
 	typedef decltype(eval_expr(decl<_T>::val())) type; //结果类型
 };
 
+template<typename _RetType, typename ... _ArgTypes>
+struct eval_type<_RetType(_ArgTypes...)>
+{
+	typedef _RetType type;
+};
+
 /**
  * @brief 条件判断和相关功能
  */
@@ -557,17 +566,18 @@ struct if_else<false>
  */
 enum classify_type : int
 {
-	VARIABLE, //普通变量
-	FUNCTION, //普通函数
-	ORID_NUM,
-	MEMB_FIELD = ORID_NUM, //成员字段
-	MEMB_FUNCTION, //成员函数
+	classify_type_unknown = -1,
+	classify_type_variable = 0, //普通变量
+	classify_type_function, //普通函数
+	classify_type_orid_num,
+	classify_type_memb_field = classify_type_orid_num, //成员字段
+	classify_type_memb_function, //成员函数
 };
 
-using classify_type_variable_t = __constexpr__(classify_type::VARIABLE);
-using classify_type_function_t = __constexpr__(classify_type::FUNCTION);
-using classify_type_memb_field_t = __constexpr__(classify_type::MEMB_FIELD);
-using classify_type_memb_function_t = __constexpr__(classify_type::MEMB_FUNCTION);
+using classify_type_variable_t = __constexpr__(classify_type::classify_type_variable);
+using classify_type_function_t = __constexpr__(classify_type::classify_type_function);
+using classify_type_memb_field_t = __constexpr__(classify_type::classify_type_memb_field);
+using classify_type_memb_function_t = __constexpr__(classify_type::classify_type_memb_function);
 
 /**
  * @brief 值的种类判断
@@ -575,70 +585,70 @@ using classify_type_memb_function_t = __constexpr__(classify_type::MEMB_FUNCTION
 template<typename _T>
 struct classify_type_of_t
 {
-	static const classify_type value = classify_type::VARIABLE;
+	static const classify_type value = classify_type::classify_type_variable;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
 struct classify_type_of_t<_RetType(_ArgTypes...)>
 {
-	static const classify_type value = classify_type::FUNCTION;
+	static const classify_type value = classify_type::classify_type_function;
 };
 
 template<typename _RetType, typename ... _ArgTypes>
 struct classify_type_of_t<_RetType (*)(_ArgTypes...)>
 {
-	static const classify_type value = classify_type::FUNCTION;
+	static const classify_type value = classify_type::classify_type_function;
 };
 
 template<typename _Class, typename _T>
 struct classify_type_of_t<_T _Class::*>
 {
-	static const classify_type value = classify_type::MEMB_FIELD;
+	static const classify_type value = classify_type::classify_type_memb_field;
 };
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
 struct classify_type_of_t<_RetType (_Class::*)(_ArgTypes...)>
 {
-	static const classify_type value = classify_type::MEMB_FUNCTION;
+	static const classify_type value = classify_type::classify_type_memb_function;
 };
 
 template<typename _T>
 inline constexpr classify_type classify_type_of(_T*)
 {
-	return classify_type::VARIABLE;
+	return classify_type::classify_type_variable;
 }
 
 template<typename _RetType, typename ... _ArgTypes>
 inline constexpr classify_type classify_type_of(_RetType (*)(_ArgTypes...))
 {
-	return classify_type::FUNCTION;
+	return classify_type::classify_type_function;
 }
 
 template<typename _Class, typename _T>
 inline constexpr classify_type classify_type_of(_T _Class::*)
 {
-	return classify_type::MEMB_FIELD;
+	return classify_type::classify_type_memb_field;
 }
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
 inline constexpr classify_type classify_type_of(_RetType (_Class::*)(_ArgTypes...))
 {
-	return classify_type::MEMB_FUNCTION;
+	return classify_type::classify_type_memb_function;
 }
 
 inline constexpr classify_type to_orid_classification(classify_type classification)
 {
-	return classification > classify_type::ORID_NUM ? (classify_type)(classification - classify_type::ORID_NUM) : classification;
+	return classification > classify_type::classify_type_orid_num ? (classify_type)(classification - classify_type::classify_type_orid_num) : classification;
 }
 
 inline constexpr classify_type to_memb_classification(classify_type classification)
 {
-	return classification < classify_type::ORID_NUM ? (classify_type)(classification + classify_type::ORID_NUM) : classification;
+	return classification < classify_type::classify_type_orid_num ? (classify_type)(classification + classify_type::classify_type_orid_num) : classification;
 }
 
 inline constexpr bool is_memb_classification(classify_type classification)
 {
-	return classification == classify_type::MEMB_FIELD || classification == classify_type::MEMB_FUNCTION;
+	return classification == classify_type::classify_type_memb_field || classification == classify_type::classify_type_memb_function;
 }
 
 /**

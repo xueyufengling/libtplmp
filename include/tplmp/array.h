@@ -1,7 +1,7 @@
 #ifndef _TPLMP_ARRAY
 #define _TPLMP_ARRAY
 
-#include <tplmp/base.h>
+#include "base.h"
 
 namespace tplmp
 {

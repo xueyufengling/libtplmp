@@ -1,8 +1,8 @@
 #ifndef _TPLMP_CALLABLE
 #define _TPLMP_CALLABLE
 
-#include <tplmp/base.h>
-#include <tplmp/tuple.h>
+#include "base.h"
+#include "tuple.h"
 
 namespace tplmp
 {

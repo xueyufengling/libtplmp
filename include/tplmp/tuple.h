@@ -1,7 +1,7 @@
 #ifndef _TPLMP_TUPLE
 #define _TPLMP_TUPLE
 
-#include <tplmp/base.h>
+#include "base.h"
 
 namespace tplmp
 {
@@ -42,9 +42,9 @@ struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
 	tuple<_RestTypes...> back_elems;
 
 	tuple() = default;
-	tuple(const _FirstType& first, const _RestTypes& ... rest)
+	tuple(_FirstType&& first, _RestTypes&& ... rest)
 	:
-			front_elem(first), back_elems(rest...)
+			front_elem(forward<_FirstType>(first)), back_elems(forward<_RestTypes>(rest)...)
 	{
 	}
 

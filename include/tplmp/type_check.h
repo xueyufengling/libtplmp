@@ -1,12 +1,13 @@
 #ifndef _TPLMP_TYPECHECK
 #define _TPLMP_TYPECHECK
 
-#include <tplmp/base.h>
+#include "base.h"
 
 namespace tplmp
 {
 
 #define __assert_is_class__(class_name) static_assert(tplmp::is_class<class_name>::value, "'" #class_name "' must be class type")
+#define __assert_is_derived__(derived_name, base_name) static_assert(tplmp::is_derived<derived_name, base_name>::value, "'" #derived_name "' must be derived from " #base_name)
 
 template<typename _T>
 struct is_ptr
