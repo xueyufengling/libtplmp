@@ -147,13 +147,13 @@ protected:
 		}
 
 		template<typename _T>
-		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast()
+		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast() const
 		{
 			return __cast_impl<_T>::cast(*this);
 		}
 
 		template<typename _T>
-		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type()
+		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type() const
 		{
 			return cast();
 		}
@@ -200,7 +200,7 @@ struct univptr_t: __univptr_impl_base
 
 	template<typename _T>
 	inline constexpr
-	typename tplmp::ptr_type<_Class, _T>::type cast()
+	typename tplmp::ptr_type<_Class, _T>::type cast() const
 	{
 		return if_else<type_equal<_Class, void>::value>
 		::_return(orid_ptr.template cast<_T>(),
@@ -209,13 +209,13 @@ struct univptr_t: __univptr_impl_base
 
 	//当_Class为非void时才允许转换为类成员指针
 	template<typename _T, typename = typename if_else<!type_equal<_Class, void>::value && !type_equal<_T, void>::value>::def<> >
-	inline constexpr operator _T _Class::*()
+	inline constexpr operator _T _Class::*() const
 	{
 		return memb_ptr.template cast<_T>();
 	}
 
 	template<typename _T>
-	inline constexpr operator _T*()
+	inline constexpr operator _T*() const
 	{
 		return orid_ptr.template cast<_T>();
 	}

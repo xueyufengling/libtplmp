@@ -19,49 +19,61 @@ struct __pmemb_identifier
 
 /**
  * @brief pmemb_id类用于定义一个访问的ID标识。
- * 		  __pmemb_value_##pmemb_id则实际储存了成员指针的值，但使用前需要强制转换成目标类型。
- * 		  template class显式实例化可以无视访问修饰符
- * 		  本类只会在template class显式实例化时能访问或引用，因此必须在模板实例化时就将成员指针值传出。但在C++11没有任何办法可以在编译时传出。
+ * 		  pmemb实际储存了成员指针的值，但使用前需要强制转换成目标类型。
+ * 		  原理：
+ * 		  template class显式实例化可以无视访问修饰符。
+ * 		  __initializer类只会在template class显式实例化时能访问到private成员指针，因此必须在模板实例化时就想办法将成员指针值传出。
+ * 		  这里使用模板友元注入，friend函数来实现传出成员指针：模板类内定义的friend函数，可以使用模板参数，同时它又不属于该模板，而是命名空间下的普通函数，可以实现在不写出模板类型的前提下，得到模板参数。
+ * 		  利用函数参数自动推导，可以匹配到与_pMembIdentifier对应的__initializer_pmemb_value()函数重载，巧妙地将值在编译期就传递出来。如果不这样做，则只能在__initializer内部运行时通过静态初始化赋值才能传递出去。
+ * 		  ADL要求__initializer_pmemb_value()的参数与所属模板类在同一命名空间。
+ * 		  此宏只能定义一次，因为模板的显式实例化只能声明一次，多次声明将抛出编译错误。
+ *
+ * 		  __memb_ptr()函数用于编译期获取成员指针，在使用前需要手动声明一次。
  */
-#define __decl_pmemb__(pmemb_id, class_name)\
+#define __decl_pmemb__(pmemb_id, class_name, memb_name)\
 	struct pmemb_id: ::tplmp::__pmemb_identifier<class_name>\
 	{\
-		using ::tplmp::__pmemb_identifier<class_name>::decl_class;\
-		static ::tplmp::classify_type classification;\
-		static ::tplmp::univptr_t<decl_class> pmemb;\
+		typedef class_name decl_class;\
+		static const ::tplmp::classify_type classification;\
+		static const ::tplmp::univptr_t<decl_class> pmemb;\
 		pmemb_id() = delete;\
 	private:\
 		template<typename _pMemb, _pMemb _pMembValue>\
 		struct __initializer\
 		{\
-		private:\
-			__initializer()\
+			friend inline constexpr ::tplmp::classify_type __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>)\
 			{\
-				pmemb_id::decl_type = __tplmp_str__(typename ::tplmp::decl_type<_pMemb>::type);\
-				pmemb_id::classification = ::tplmp::classify_type_of_t<_pMemb>::value;\
-				pmemb_id::pmemb = _pMembValue;\
+				return ::tplmp::classify_type_of_t<_pMemb>::value;\
 			}\
-			static const __initializer<_pMemb, _pMembValue> _init;\
+			friend inline constexpr ::tplmp::univptr_t<class_name> __initializer_pmemb_value(::tplmp::type_t<pmemb_id>)\
+			{\
+				return _pMembValue;\
+			}\
+			friend inline constexpr _pMemb __memb_ptr_intl(::tplmp::type_t<pmemb_id>)\
+			{\
+				return _pMembValue;\
+			}\
 		};\
 	};\
-	::tplmp::classify_type pmemb_id::classification = ::tplmp::classify_type::classify_type_unknown;\
-	::tplmp::univptr_t<typename pmemb_id::decl_class> pmemb_id::pmemb{};\
-	template<typename _pMemb, _pMemb _pMembValue>\
-	const typename pmemb_id::__initializer<_pMemb, _pMembValue> pmemb_id::__initializer<_pMemb, _pMembValue>::_init{};
+	template class pmemb_id::__initializer<decltype(&class_name::memb_name), &class_name::memb_name>;\
+	inline constexpr ::tplmp::classify_type __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>);\
+	inline constexpr ::tplmp::univptr_t<class_name> __initializer_pmemb_value(::tplmp::type_t<pmemb_id>);\
+	constexpr ::tplmp::classify_type pmemb_id::classification = __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>());\
+	const ::tplmp::univptr_t<class_name> pmemb_id::pmemb = __initializer_pmemb_value(::tplmp::type_t<pmemb_id>());
 
 /**
- * @brief 初始化，即执行取成员指针的行为。
- * 		  此宏将为decl_pmemb()声明的成员指针标识符赋值。
- * 		  此宏只能定义一次，因为模板的显式实例化只能声明一次，多次声明将抛出编译错误。
+ * @brief 定义取成员指针值的constexpr函数，decl_type必须与实际声明类型严格保持一致。
+ * 		  __decl_memb_ptr__()与__decl_pmemb__()必须在同一命名空间下。
  */
-#define __fetch_pmemb__(pmemb_id, memb_name) template class pmemb_id::__initializer<decltype(&pmemb_id::decl_class::memb_name), &pmemb_id::decl_class::memb_name>;
-
-#define __enable_pmemb__(pmemb_id, class_name, memb_name)\
-		__decl_pmemb__(pmemb_id, class_name)\
-		__fetch_pmemb__(pmemb_id, memb_name)
-
-#define __read_pmemb_classification__(pmemb_id) (pmemb_id::classification)
-#define __read_pmemb_value__(pmemb_id) (pmemb_id::pmemb)
+#define __decl_memb_ptr__(pmemb_id, decl_type)\
+	inline constexpr typename ::tplmp::ptr_type<typename pmemb_id::decl_class, decl_type>::type __memb_ptr_intl(::tplmp::type_t<pmemb_id>);\
+	template<typename _pMembIdentifier>\
+	inline constexpr auto __memb_ptr() -> decltype(__memb_ptr_intl(tplmp::type_t<_pMembIdentifier>()));\
+	template<>\
+	inline constexpr auto __memb_ptr<pmemb_id>() -> decltype(__memb_ptr_intl(tplmp::type_t<pmemb_id>()))\
+	{\
+		return __memb_ptr_intl(::tplmp::type_t<pmemb_id>());\
+	}
 
 /**
  * @brief 访问标识符，将成员指针标识符绑定一个类型。
