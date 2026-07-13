@@ -23,43 +23,48 @@ struct __pmemb_identifier
  * 		  原理：
  * 		  template class显式实例化可以无视访问修饰符。
  * 		  __initializer类只会在template class显式实例化时能访问到private成员指针，因此必须在模板实例化时就想办法将成员指针值传出。
- * 		  这里使用模板友元注入，friend函数来实现传出成员指针：模板类内定义的friend函数，可以使用模板参数，同时它又不属于该模板，而是命名空间下的普通函数，可以实现在不写出模板类型的前提下，得到模板参数。
- * 		  利用函数参数自动推导，可以匹配到与_pMembIdentifier对应的__initializer_pmemb_value()函数重载，巧妙地将值在编译期就传递出来。如果不这样做，则只能在__initializer内部运行时通过静态初始化赋值才能传递出去。
- * 		  ADL要求__initializer_pmemb_value()的参数与所属模板类在同一命名空间。
+ * 		  这里使用模板友元注入，friend函数来实现传出成员指针：模板类内定义的friend函数，可以使用模板参数，同时它又不属于该模板，而是指定命名空间下的普通函数，可以实现在不写出模板类型的前提下，得到模板参数。
+ * 		  利用函数参数自动推导，可以匹配到与_pMembIdentifier对应的__pmemb_value()函数重载，巧妙地将值在编译期就传递出来。如果不这样做，则只能在__initializer内部运行时通过静态初始化赋值才能传递出去。
+ * 		  ADL要求__pmemb_value()的参数与所属模板类在同一命名空间。
  * 		  此宏只能定义一次，因为模板的显式实例化只能声明一次，多次声明将抛出编译错误。
  *
  * 		  __memb_ptr()函数用于编译期获取成员指针，在使用前需要手动声明一次。
  */
 #define __decl_pmemb__(pmemb_id, class_name, memb_name)\
-	struct pmemb_id: ::tplmp::__pmemb_identifier<class_name>\
+	struct pmemb_id: ::tplmp::__pmemb_identifier<class_name> {};\
+	template<typename _pMemb, _pMemb _pMembValue>\
+	struct __pmemb_initializer_##pmemb_id\
 	{\
-		typedef class_name decl_class;\
-		static const ::tplmp::classify_type classification;\
-		static const ::tplmp::univptr_t<decl_class> pmemb;\
-		pmemb_id() = delete;\
-	private:\
-		template<typename _pMemb, _pMemb _pMembValue>\
-		struct __initializer\
+		friend inline constexpr ::tplmp::classify_type __pmemb_classification_intl(::tplmp::type_t<pmemb_id>)\
 		{\
-			friend inline constexpr ::tplmp::classify_type __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>)\
-			{\
-				return ::tplmp::classify_type_of_t<_pMemb>::value;\
-			}\
-			friend inline constexpr ::tplmp::univptr_t<class_name> __initializer_pmemb_value(::tplmp::type_t<pmemb_id>)\
-			{\
-				return _pMembValue;\
-			}\
-			friend inline constexpr _pMemb __memb_ptr_intl(::tplmp::type_t<pmemb_id>)\
-			{\
-				return _pMembValue;\
-			}\
-		};\
+			return ::tplmp::classify_type_of_t<_pMemb>::value;\
+		}\
+		friend inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>)\
+		{\
+			return _pMembValue;\
+		}\
+		friend inline constexpr _pMemb __memb_ptr_intl(::tplmp::type_t<pmemb_id>)\
+		{\
+			return _pMembValue;\
+		}\
 	};\
-	template class pmemb_id::__initializer<decltype(&class_name::memb_name), &class_name::memb_name>;\
-	inline constexpr ::tplmp::classify_type __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>);\
-	inline constexpr ::tplmp::univptr_t<class_name> __initializer_pmemb_value(::tplmp::type_t<pmemb_id>);\
-	constexpr ::tplmp::classify_type pmemb_id::classification = __initializer_pmemb_classification(::tplmp::type_t<pmemb_id>());\
-	const ::tplmp::univptr_t<class_name> pmemb_id::pmemb = __initializer_pmemb_value(::tplmp::type_t<pmemb_id>());
+	template class __pmemb_initializer_##pmemb_id<decltype(&class_name::memb_name), &class_name::memb_name>;\
+	inline constexpr ::tplmp::classify_type __pmemb_classification_intl(::tplmp::type_t<pmemb_id>);\
+	template<typename _pMembIdentifier>\
+	inline constexpr ::tplmp::classify_type __pmemb_classification();\
+	template<>\
+	inline constexpr ::tplmp::classify_type __pmemb_classification<pmemb_id>()\
+	{\
+		return __pmemb_classification_intl(::tplmp::type_t<pmemb_id>());\
+	}\
+	inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>);\
+	template<typename _pMembIdentifier>\
+	inline constexpr ::tplmp::univptr_t<typename _pMembIdentifier::decl_class> __pmemb_univptr_t();\
+	template<>\
+	inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t<pmemb_id>()\
+	{\
+		return __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>());\
+	}
 
 /**
  * @brief 定义取成员指针值的constexpr函数，decl_type必须与实际声明类型严格保持一致。
@@ -75,14 +80,26 @@ struct __pmemb_identifier
 		return __memb_ptr_intl(::tplmp::type_t<pmemb_id>());\
 	}
 
+#define __decl_pmemb_struct__(pmemb_struct, pmemb_id, class_name, memb_name)\
+	struct pmemb_struct\
+	{\
+		typedef pmemb_id pmemb_identifier;\
+		typedef class_name decl_class;\
+		static constexpr ::tplmp::classify_type classification = __pmemb_classification<pmemb_id>();\
+		static const ::tplmp::univptr_t<class_name> pmemb;\
+		__pmemb_value_##pmemb_id() = delete;\
+	};\
+	const ::tplmp::univptr_t<class_name> __pmemb_value_##pmemb_id::pmemb = __pmemb_univptr_t<pmemb_id>();
+
 /**
  * @brief 访问标识符，将成员指针标识符绑定一个类型。
  */
-template<typename _pMembIdentifier, typename _MembType>
+template<typename _pMembStruct, typename _MembType>
 struct __access_identifier
 {
-	typedef _pMembIdentifier pmemb_identifier;
-	typedef typename _pMembIdentifier::decl_class decl_class;
+	typedef _pMembStruct pmemb_struct;
+	typedef typename pmemb_struct::pmemb_identifier pmemb_identifier;
+	typedef typename pmemb_identifier::decl_class decl_class;
 
 	typedef _MembType decl_type; //成员声明的类型
 	typedef typename tplmp::ptr_type<decl_class, _MembType>::type pmemb_type; //成员指针类型
@@ -230,11 +247,11 @@ protected:
 
 template<typename _AccessIdentifier>
 typename __accessor_impl_base::field_accessor<_AccessIdentifier>::pmemb_type
-__accessor_impl_base::field_accessor<_AccessIdentifier>::pmemb = (typename __accessor_impl_base::field_accessor<_AccessIdentifier>::pmemb_type)_AccessIdentifier::pmemb_identifier::pmemb;
+__accessor_impl_base::field_accessor<_AccessIdentifier>::pmemb = (typename __accessor_impl_base::field_accessor<_AccessIdentifier>::pmemb_type)_AccessIdentifier::pmemb_struct::pmemb;
 
 template<typename _AccessIdentifier>
 typename __accessor_impl_base::function_accessor<_AccessIdentifier>::pmemb_type
-__accessor_impl_base::function_accessor<_AccessIdentifier>::pmemb = (typename __accessor_impl_base::function_accessor<_AccessIdentifier>::pmemb_type)_AccessIdentifier::pmemb_identifier::pmemb;
+__accessor_impl_base::function_accessor<_AccessIdentifier>::pmemb = (typename __accessor_impl_base::function_accessor<_AccessIdentifier>::pmemb_type)_AccessIdentifier::pmemb_struct::pmemb;
 
 /**
  * @brief 访问私有成员，若目标成员不存在则会直接抛出编译错误
@@ -315,8 +332,8 @@ using accessor = __accessor_impl<_AccessIdentifier>;
 /**
  * @brief 用于定义一个访问的ID标识
  */
-#define __decl_accessor__(acc_id, namespaced_pmemb_id, decl_type)\
-	struct acc_id: ::tplmp::__access_identifier<namespaced_pmemb_id, decl_type> {};
+#define __decl_accessor__(acc_id, namespaced_pmemb_struct, decl_type)\
+	struct acc_id: ::tplmp::__access_identifier<namespaced_pmemb_struct, decl_type> {};
 }
 
 #endif //_TPLMP_ACCESS
