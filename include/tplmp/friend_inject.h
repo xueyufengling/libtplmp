@@ -5,7 +5,9 @@
 #include <ppmp/linguistic.h>
 
 // expand_id统一使用0
+#if !defined(__tplmp_friend_inject_expand_id__)
 #define __tplmp_friend_inject_expand_id__() 0
+#endif
 
 /**
  * @brief 编译期通过tag进行ADL查找的函数
