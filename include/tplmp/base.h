@@ -48,26 +48,7 @@ public:
 
 #define __assert_not_impl__(type_or_value) static_assert(false, "specialization of '" #type_or_value "' not implemented")
 
-#define __crtp_this__(derived_type) ((derived_type*)this)
-
-/**
- * @brief 字符串化
- */
-#define __tplmp_str_intl__(...) #__VA_ARGS__
-#define __tplmp_str__(...) __tplmp_str_intl__(__VA_ARGS__)
-
-#define __pragma__(...) _Pragma(__tplmp_str__(__VA_ARGS__))
-
-/**
- * @brief 提示编译期展开循环
- */
-#ifdef __GNUC__
-#define __loop_unroll__(n) __pragma__(GCC unroll n)
-#elif defined(__clang__)
-#define __loop_unroll__(n) __pragma__(unroll n)
-#else
-#define __loop_unroll__(n)
-#endif
+#define __crtp_this__(...) ((__VA_ARGS__*)this)
 
 /**
  * @brief 空结构体，可用作继承占位符

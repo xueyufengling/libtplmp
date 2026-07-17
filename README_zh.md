@@ -4,6 +4,7 @@
 
     libtplmp是一个仅头文件的库，为C++模板元编程提供了基本的实现。需要不低于C++11的标准。<br>
     此外，一些其它的基于模板的技巧也包含在本库中。<br>
+    本库依赖于[libtplmp](https://github.com/xueyufengling/libtplmp/tree/main)和[libppmp](https://github.com/xueyufengling/libppmp/tree/main)，由于预处理器元编程依赖大量预定义的宏，如果宏的数量太多，将会显著地降低编译速度。为了提高编译速度，在安装libppmp时需要根据项目情况调整自动生成宏的参数。<br>
 
 # 许可
 

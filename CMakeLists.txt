@@ -2,11 +2,14 @@ cmake_minimum_required (VERSION 3.10)
 
 project(tplmp)
 
+find_package(ppmp REQUIRED)
+
 add_library(${PROJECT_NAME} INTERFACE)
 
 set(PROJECT_SOURCE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_include_directories(${PROJECT_NAME} INTERFACE "${PROJECT_SOURCE_INCLUDE_DIRS}")
+target_include_directories(${PROJECT_NAME} INTERFACE "${ppmp_INCLUDE_DIRS}")
  
 set(PROJECT_INSTALL_INCLUDE_DIRS "${CMAKE_INSTALL_PREFIX}/include")
 set(PROJECT_INSTALL_LIBRARIES)

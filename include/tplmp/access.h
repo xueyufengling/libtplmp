@@ -2,6 +2,7 @@
 #define _TPLMP_ACCESS
 
 #include "univptr.h"
+#include "friend_inject.h"
 
 namespace tplmp
 {
@@ -29,67 +30,57 @@ struct __pmemb_identifier
  * 		  此宏只能定义一次，因为模板的显式实例化只能声明一次，多次声明将抛出编译错误。
  *
  * 		  __memb_ptr()函数用于编译期获取成员指针，在使用前需要手动声明一次。
+ * @param pmemb_id ID名称
+ * @param class_name __entity__(所属类型名称)
+ * @param memb_name __entity__(成员名称)
+ * @param memb_type __entity__(类型名称)
  */
-#define __decl_pmemb__(pmemb_id, class_name, memb_name)\
-	struct pmemb_id: ::tplmp::__pmemb_identifier<class_name> {};\
+#define __pmemb_initializer_struct__(pmemb_id) __cat__(2, __pmemb_initializer_, pmemb_id)
+#define __decl_pmemb__(pmemb_id, class_name, memb_name, memb_type)\
+	struct pmemb_id: ::tplmp::__pmemb_identifier<__entity_val__(class_name)> {};\
 	template<typename _pMemb, _pMemb _pMembValue>\
-	struct __pmemb_initializer_##pmemb_id\
+	struct __pmemb_initializer_struct__(pmemb_id)\
 	{\
-		friend inline constexpr ::tplmp::classify_type __pmemb_classification_intl(::tplmp::type_t<pmemb_id>)\
+		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification)\
 		{\
 			return ::tplmp::classify_type_of_t<_pMemb>::value;\
 		}\
-		friend inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>)\
+		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<__entity_val__(class_name)>), __pmemb_univptr_t)\
 		{\
 			return _pMembValue;\
 		}\
-		friend inline constexpr _pMemb __memb_ptr_intl(::tplmp::type_t<pmemb_id>)\
+		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(_pMemb), __memb_ptr)\
 		{\
 			return _pMembValue;\
 		}\
 	};\
-	template class __pmemb_initializer_##pmemb_id<decltype(&class_name::memb_name), &class_name::memb_name>;\
-	inline constexpr ::tplmp::classify_type __pmemb_classification_intl(::tplmp::type_t<pmemb_id>);\
-	template<typename _pMembIdentifier>\
-	inline constexpr ::tplmp::classify_type __pmemb_classification();\
-	template<>\
-	inline constexpr ::tplmp::classify_type __pmemb_classification<pmemb_id>()\
-	{\
-		return __pmemb_classification_intl(::tplmp::type_t<pmemb_id>());\
-	}\
-	inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>);\
-	template<typename _pMembIdentifier>\
-	inline constexpr ::tplmp::univptr_t<typename _pMembIdentifier::decl_class> __pmemb_univptr_t();\
-	template<>\
-	inline constexpr ::tplmp::univptr_t<class_name> __pmemb_univptr_t<pmemb_id>()\
-	{\
-		return __pmemb_univptr_t_intl(::tplmp::type_t<pmemb_id>());\
-	}
+	template class __pmemb_initializer_struct__(pmemb_id)<__entity_val__(memb_type), (__entity_val__(memb_type))&__entity_val__(class_name)::__entity_val__(memb_name)>;\
+	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification)\
+	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<typename pmemb_id::decl_class>), __pmemb_univptr_t)
 
 /**
  * @brief 定义取成员指针值的constexpr函数，decl_type必须与实际声明类型严格保持一致。
  * 		  __decl_memb_ptr__()与__decl_pmemb__()必须在同一命名空间下。
  */
 #define __decl_memb_ptr__(pmemb_id, decl_type)\
-	inline constexpr typename ::tplmp::ptr_type<typename pmemb_id::decl_class, decl_type>::type __memb_ptr_intl(::tplmp::type_t<pmemb_id>);\
-	template<typename _pMembIdentifier>\
-	inline constexpr auto __memb_ptr() -> decltype(__memb_ptr_intl(tplmp::type_t<_pMembIdentifier>()));\
-	template<>\
-	inline constexpr auto __memb_ptr<pmemb_id>() -> decltype(__memb_ptr_intl(tplmp::type_t<pmemb_id>()))\
-	{\
-		return __memb_ptr_intl(::tplmp::type_t<pmemb_id>());\
-	}
+	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(typename ::tplmp::ptr_type<typename pmemb_id::decl_class, __entity_val__(decl_type)>::type), __memb_ptr)
 
-#define __decl_pmemb_struct__(pmemb_struct, pmemb_id, class_name, memb_name)\
+#define __decl_pmemb_dft__(pmemb_id, class_name, memb_name)\
+	__decl_pmemb__(pmemb_id, class_name, memb_name, __entity__(decltype(&__entity_val__(class_name)::__entity_val__(memb_name))))
+
+/**
+ * @brief 定义储存成员指针值的结构体，必须紧邻__decl_pmemb__()之后，确保在同一命名空间下
+ */
+#define __decl_pmemb_struct__(pmemb_struct, pmemb_id, class_name)\
 	struct pmemb_struct\
 	{\
 		typedef pmemb_id pmemb_identifier;\
-		typedef class_name decl_class;\
+		typedef __entity_val__(class_name) decl_class;\
 		static constexpr ::tplmp::classify_type classification = __pmemb_classification<pmemb_id>();\
-		static const ::tplmp::univptr_t<class_name> pmemb;\
-		__pmemb_value_##pmemb_id() = delete;\
+		static const ::tplmp::univptr_t<__entity_val__(class_name)> pmemb;\
+		pmemb_struct() = delete;\
 	};\
-	const ::tplmp::univptr_t<class_name> __pmemb_value_##pmemb_id::pmemb = __pmemb_univptr_t<pmemb_id>();
+	const ::tplmp::univptr_t<__entity_val__(class_name)> pmemb_struct::pmemb = __pmemb_univptr_t<pmemb_id>();
 
 /**
  * @brief 访问标识符，将成员指针标识符绑定一个类型。
