@@ -14,19 +14,23 @@ struct callable
 {
 	_FuncType _callable;
 
-	__attribute__((always_inline)) inline callable(_FuncType&& c) :
+	__attribute__((always_inline)) inline callable(_FuncType&& c) noexcept(noexcept(_FuncType(forward<_FuncType>(c)))) :
 			_callable(forward<_FuncType>(c))
 	{
 	}
 
 	template<typename ..._ArgTypes>
-	__attribute__((always_inline)) inline auto operator()(_ArgTypes&& ... args) const -> decltype(_callable(forward<_ArgTypes>(args)...))
+	__attribute__((always_inline)) inline auto operator()(_ArgTypes&& ... args) const
+			noexcept(noexcept(_callable(forward<_ArgTypes>(args)...)))
+	-> decltype(_callable(forward<_ArgTypes>(args)...))
 	{
 		return _callable(forward<_ArgTypes>(args)...);
 	}
 
 	template<typename ..._ArgTypes>
-	__attribute__((always_inline)) inline auto call(tuple<_ArgTypes&&...>& args) const -> decltype(_callable(forward<_ArgTypes>(args)...))
+	__attribute__((always_inline)) inline auto call(tuple<_ArgTypes&&...>& args) const
+			noexcept(noexcept(_callable(forward<_ArgTypes>(args)...)))
+	-> decltype(_callable(forward<_ArgTypes>(args)...))
 	{
 		return _callable(forward<_ArgTypes>(args)...);
 	}
@@ -47,7 +51,7 @@ struct placeholder<_Index, void>
 	static constexpr size_t index = _Index;
 
 	template<typename _ArgType>
-	__attribute__((always_inline)) inline _ArgType&& operator()(_ArgType&& arg) const
+	__attribute__((always_inline)) inline _ArgType&& operator()(_ArgType&& arg) const noexcept
 	{
 		return forward<_ArgType>(arg);
 	}
@@ -59,7 +63,7 @@ struct placeholder<_Index, void>
 	 * @param m_func 参数映射，形式必须是_ArgType(*)(_ArgType)，传入占位符对应的call参数，返回映射后的最终参数
 	 */
 	template<typename _MappingFunc>
-	__attribute__((always_inline)) inline placeholder<_Index, _MappingFunc> map(_MappingFunc&& m_func)
+	__attribute__((always_inline)) inline placeholder<_Index, _MappingFunc> map(_MappingFunc&& m_func) noexcept
 	{
 		return placeholder<_Index, _MappingFunc>(forward<_MappingFunc>(m_func));
 	}
@@ -92,7 +96,7 @@ struct is_placeholder_t
 };
 
 template<typename _T>
-constexpr bool is_placeholder(_T)
+constexpr bool is_placeholder(_T) noexcept
 {
 	return __is_placeholder_impl<typename decay_type<_T>::type>::value;
 }
@@ -127,7 +131,7 @@ protected:
 	{
 		template<typename ... _ForwardCallTypes>
 		__attribute__((always_inline)) inline static typename _const<typename bound_arg_types::at<_Index>::type>::type&
-		value(const tuple<_BoundArgTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args)
+		value(const tuple<_BoundArgTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args) noexcept
 		{
 			return bound_args.template at<_Index>();
 		}
@@ -141,7 +145,7 @@ protected:
 		__attribute__((always_inline)) inline static typename type_pack<_ForwardCallTypes...>::at<
 				decay_type<typename bound_arg_types::template at<_Index>::type>::type::index
 		>::type
-		value(const tuple<_BoundArgTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args)
+		value(const tuple<_BoundArgTypes...>& bound_args, const tuple<_ForwardCallTypes...>& call_args) noexcept
 		{
 			using placeholder_type = typename decay_type<typename bound_arg_types::template at<_Index>::type>::type;
 			//是占位符则返回占位符索引对应的call_arg，并在映射后返回
@@ -168,14 +172,21 @@ struct __bound_args_callable_impl: public __bound_args_callable_impl_base<_Bound
 	//绑定的参数值，数量与原函数一致，参数类型要么与_FuncType对应位置类型相同，要么必须是tplmp::placeholder<>
 	tuple<_BoundArgTypes...> bound_args;
 
-	__attribute__((always_inline)) inline __bound_args_callable_impl(_BoundArgTypes&& ...args) :
+	__attribute__((always_inline)) inline __bound_args_callable_impl(_BoundArgTypes&& ...args) noexcept(noexcept(tuple<_BoundArgTypes...>(args...))) :
 			bound_args(args...)
 	{
 	}
 
 	//利用编译器对函数的类型自动推导从type_pack<>中提取_Indexes
 	template<size_t ..._Indexes, typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& _callable, size_t_sequence<_Indexes ...>, _CallTypes&& ... call_args) const -> decltype(
+	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& _callable, size_t_sequence<_Indexes ...>, _CallTypes&& ... call_args) const
+			noexcept(
+			noexcept(tuple<_CallTypes...>(forward<_CallTypes>(call_args)...)) &&
+					noexcept(
+							_callable(__bound_args_callable_impl_base<_BoundArgTypes...>::template fetch_arg<_Indexes>::template value(bound_args, decl<tuple<_CallTypes...> >::ref())...)
+							)
+			)
+	-> decltype(
 			_callable(__bound_args_callable_impl_base<_BoundArgTypes...>::template fetch_arg<_Indexes>
 					::template value(bound_args, decl<tuple<_CallTypes...> >::ref())...
 			)
@@ -187,7 +198,11 @@ struct __bound_args_callable_impl: public __bound_args_callable_impl_base<_Bound
 	}
 
 	template<typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) const -> decltype(
+	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) const
+			noexcept(
+			noexcept(__call_impl(forward<_FuncType>(_callable), index_sequence_t<size_t, 0, sizeof...(_BoundArgTypes)>(), forward<_CallTypes>(call_args)...))
+			)
+	-> decltype(
 			__call_impl(forward<_FuncType>(_callable), index_sequence_t<size_t, 0, sizeof...(_BoundArgTypes)>(), forward<_CallTypes>(call_args)...)
 	)
 	{
@@ -205,19 +220,20 @@ struct __bound_ret_callable_impl
 
 	typedef _BoundRetType ret_type;
 
-	__attribute__((always_inline)) inline __bound_ret_callable_impl(_BoundRetType&& ret) :
+	__attribute__((always_inline)) inline __bound_ret_callable_impl(_BoundRetType&& ret) noexcept(noexcept(_BoundRetType(forward<_BoundRetType>(ret)))) :
 			bound_ret(ret)
 	{
 	}
 
 	template<typename _RetType>
-	__attribute__((always_inline)) inline _BoundRetType _return(_RetType&& ret) const
+	__attribute__((always_inline)) inline _BoundRetType _return(_RetType&& ret) const noexcept
 	{
 		return bound_ret;
 	}
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline _BoundRetType call(_FuncType&& _callable, _CallTypes&& ... call_args) const
+			noexcept(noexcept(_callable(forward<_CallTypes>(call_args)...)))
 	{
 		_callable(forward<_CallTypes>(call_args)...);
 		return bound_ret;
@@ -228,12 +244,13 @@ template<typename _FuncType>
 struct __bound_ret_callable_impl<_FuncType, void>
 {
 	template<typename _RetType>
-	__attribute__((always_inline)) inline void _return(_RetType&& ret) const
+	__attribute__((always_inline)) inline void _return(_RetType&& ret) const noexcept
 	{
 	}
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline void call(_FuncType&& _callable, _CallTypes&& ... call_args) const
+			noexcept(noexcept(_callable(forward<_CallTypes>(call_args)...)))
 	{
 		_callable(forward<_CallTypes>(call_args)...);
 	}
@@ -246,21 +263,23 @@ struct __bound_ret_callable_impl<_FuncType, placeholder<_RetIndex, _RetMappingFu
 
 	placeholder_type bound_ret;
 
-	__attribute__((always_inline)) inline __bound_ret_callable_impl(const placeholder_type& ret_m) :
+	__attribute__((always_inline)) inline __bound_ret_callable_impl(const placeholder_type& ret_m) noexcept :
 			bound_ret(ret_m)
 	{
 	}
 
 	template<typename _RetType>
-	__attribute__((always_inline)) inline auto _return(_RetType&& ret) const -> decltype(bound_ret(forward<_RetType>(ret)))
+	__attribute__((always_inline)) inline auto _return(_RetType&& ret) const
+			noexcept(noexcept(bound_ret(forward<_RetType>(ret))))
+	-> decltype(bound_ret(forward<_RetType>(ret)))
 	{
 		return bound_ret(forward<_RetType>(ret));
 	}
 
 	template<typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) const -> decltype(
-			_return(_callable(forward<_CallTypes>(call_args)...))
-	)
+	__attribute__((always_inline)) inline auto call(_FuncType&& _callable, _CallTypes&& ... call_args) const
+			noexcept(noexcept(_return(_callable(forward<_CallTypes>(call_args)...))))
+	-> decltype(_return(_callable(forward<_CallTypes>(call_args)...)))
 	{
 		return _return(_callable(forward<_CallTypes>(call_args)...));
 	}
@@ -290,7 +309,11 @@ struct bound_callable:
 
 	using callable<_FuncType>::_callable;
 
-	bound_callable(_FuncType&& c, _BoundRetType&& ret, _BoundArgTypes&& ...args) :
+	bound_callable(_FuncType&& c, _BoundRetType&& ret, _BoundArgTypes&& ...args)
+			noexcept(noexcept(callable<_FuncType>(forward<_FuncType>(c))) &&
+					noexcept(ret_callable_base(forward<_BoundRetType>(ret))) &&
+					noexcept(args_callable_base(forward<_BoundArgTypes>(args)...))
+			) :
 			callable<_FuncType>(forward<_FuncType>(c)),
 					ret_callable_base(forward<_BoundRetType>(ret)),
 					args_callable_base(forward<_BoundArgTypes>(args)...)
@@ -300,6 +323,7 @@ struct bound_callable:
 	//bound_ret是可变的，因此函数不加const修饰符
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline typename if_else<sizeof...(_CallTypes) <= bound_args_num && has_bound_args>::def<_BoundRetType> operator()(_CallTypes&& ... call_args)
+			noexcept(noexcept(args_callable_base_impl::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...)))
 	{
 		//参数包call_args是左值，直接展开所有值都变成左值，需要套一层forward函数将右值属性保留
 		args_callable_base_impl::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
@@ -310,6 +334,7 @@ struct bound_callable:
 	//如果直接写typename if_else<!has_bound_args>::def<_BoundRetType>，由于has_bound_args是已知编译期常量无需推导，则def<>类型就是完全确定的无需推导，此时会引发编译硬错误而非SFINAE
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline typename if_else<sizeof...(_CallTypes) >= bound_args_num && !has_bound_args>::def<_BoundRetType> operator()(_CallTypes&& ... call_args)
+			noexcept(noexcept(_callable(forward<_CallTypes>(call_args)...)))
 	{
 		_callable(forward<_CallTypes>(call_args)...);
 		return ret_callable_base::bound_ret;
@@ -337,7 +362,11 @@ struct bound_callable<_FuncType, void, _BoundArgTypes...> :
 
 	using callable<_FuncType>::_callable;
 
-	bound_callable(_FuncType&& c, _BoundArgTypes&& ...args) :
+	bound_callable(_FuncType&& c, _BoundArgTypes&& ...args)
+			noexcept(
+			noexcept(callable<_FuncType>(forward<_FuncType>(c))) &&
+					noexcept(args_callable_base(forward<_BoundArgTypes>(args)...))
+			) :
 			callable<_FuncType>(forward<_FuncType>(c)),
 					args_callable_base(forward<_BoundArgTypes>(args)...)
 	{
@@ -345,12 +374,14 @@ struct bound_callable<_FuncType, void, _BoundArgTypes...> :
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline typename if_else<sizeof...(_CallTypes) <= bound_args_num && has_bound_args>::def<void> operator()(_CallTypes&& ... call_args) const
+			noexcept(noexcept(args_callable_base::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...)))
 	{
 		args_callable_base::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...);
 	}
 
 	template<typename ..._CallTypes>
 	__attribute__((always_inline)) inline typename if_else<sizeof...(_CallTypes) >= bound_args_num && !has_bound_args>::def<void> operator()(_CallTypes&& ... call_args) const
+			noexcept(noexcept(_callable(forward<_CallTypes>(call_args)...)))
 	{
 		_callable(forward<_CallTypes>(call_args)...);
 	}
@@ -382,7 +413,12 @@ struct bound_callable<_FuncType, placeholder<_Index, _MappingFunc>, _BoundArgTyp
 	using callable<_FuncType>::_callable;
 
 	//与bound_callable<_FuncType, _BoundRetType, ._BoundArgTypes...>构造函数保持同一形式，如此可以统一调用
-	bound_callable(_FuncType&& c, const placeholder_type& ret, _BoundArgTypes&& ...args) :
+	bound_callable(_FuncType&& c, const placeholder_type& ret, _BoundArgTypes&& ...args)
+			noexcept(
+			noexcept(callable<_FuncType>(forward<_FuncType>(c))) &&
+					noexcept(ret_callable_base(ret)) &&
+					noexcept(args_callable_base(forward<_BoundArgTypes>(args)...))
+			) :
 			callable<_FuncType>(forward<_FuncType>(c)),
 					ret_callable_base(ret),
 					args_callable_base(forward<_BoundArgTypes>(args)...)
@@ -390,7 +426,11 @@ struct bound_callable<_FuncType, placeholder<_Index, _MappingFunc>, _BoundArgTyp
 	}
 
 	template<typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args) ->
+	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args)
+			noexcept(
+			noexcept(ret_callable_base::_return(args_callable_base_impl::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...)))
+			)
+	->
 	typename if_else<sizeof...(_CallTypes) <= bound_args_num && has_bound_args>::def<decltype(
 			ret_callable_base::_return(args_callable_base_impl::call(forward<_FuncType>(_callable), forward<_CallTypes>(call_args)...))
 	)>
@@ -399,7 +439,11 @@ struct bound_callable<_FuncType, placeholder<_Index, _MappingFunc>, _BoundArgTyp
 	}
 
 	template<typename ..._CallTypes>
-	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args) ->
+	__attribute__((always_inline)) inline auto operator()(_CallTypes&& ... call_args)
+			noexcept(
+			noexcept(ret_callable_base::_return(_callable(forward<_CallTypes>(call_args)...)))
+			)
+	->
 	typename if_else<sizeof...(_CallTypes) >= bound_args_num && !has_bound_args>::def<decltype(
 			ret_callable_base::_return(_callable(forward<_CallTypes>(call_args)...))
 	)>
@@ -416,24 +460,28 @@ struct bound_callable<_FuncType, const placeholder_ret&, _BoundArgTypes...> : pu
 
 template<typename _FuncType, typename _BoundRetType, typename ..._BoundArgTypes>
 inline bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...> bind(_FuncType&& c, _BoundRetType&& bound_ret, _BoundArgTypes&& ...bound_args)
+		noexcept(noexcept(bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret), forward<_BoundArgTypes>(bound_args)...)))
 {
 	return bound_callable<_FuncType, _BoundRetType, _BoundArgTypes...>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret), forward<_BoundArgTypes>(bound_args)...);
 }
 
 template<typename _FuncType, typename ..._BoundArgTypes>
 inline bound_callable<_FuncType, placeholder_ret, _BoundArgTypes...> bind_args(_FuncType&& c, _BoundArgTypes&& ...bound_args)
+		noexcept(noexcept(bind(forward<_FuncType>(c), placeholder_ret::value, forward<_BoundArgTypes>(bound_args)...)))
 {
 	return bind(forward<_FuncType>(c), placeholder_ret::value, forward<_BoundArgTypes>(bound_args)...);
 }
 
 template<typename _FuncType, typename _BoundRetType>
 inline bound_callable<_FuncType, _BoundRetType> bind_ret(_FuncType&& c, _BoundRetType&& bound_ret)
+		noexcept(noexcept(bound_callable<_FuncType, _BoundRetType>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret))))
 {
 	return bound_callable<_FuncType, _BoundRetType>(forward<_FuncType>(c), forward<_BoundRetType>(bound_ret));
 }
 
 template<typename _FuncType>
 inline bound_callable<_FuncType, void> bind_ret(_FuncType&& c)
+		noexcept(noexcept(bound_callable<_FuncType, void>(forward<_FuncType>(c))))
 {
 	return bound_callable<_FuncType, void>(forward<_FuncType>(c));
 }

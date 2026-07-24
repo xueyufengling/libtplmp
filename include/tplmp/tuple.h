@@ -27,7 +27,7 @@ struct tuple<>
 	static const size_t size = 0;
 
 	template<typename _FuncType>
-	__attribute__((always_inline)) inline auto call(_FuncType&& c) const -> decltype(c())
+	__attribute__((always_inline)) inline auto call(_FuncType&& c) const noexcept(noexcept(c())) -> decltype(c())
 	{
 		return c();
 	}
@@ -43,7 +43,10 @@ struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
 
 	tuple() = default;
 	tuple(_FirstType&& first, _RestTypes&& ... rest)
-	:
+			noexcept(
+			noexcept(_FirstType(forward<_FirstType>(first))) &&
+					noexcept(tuple<_RestTypes...>(forward<_RestTypes>(rest)...))
+			) :
 			front_elem(forward<_FirstType>(first)), back_elems(forward<_RestTypes>(rest)...)
 	{
 	}
@@ -51,19 +54,23 @@ struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
 	//索引越界会在auto -> decltype()推导过程中报错，不会触发函数体内的静态断言！
 	//需要人工保证不越界
 	template<size_t _Index>
-	auto at() -> decltype(__at_impl<_Index>::template value(decl<tuple<_FirstType, _RestTypes...> >::ref()))
+	auto at() noexcept -> decltype(__at_impl<_Index>::template value(decl<tuple<_FirstType, _RestTypes...> >::ref()))
 	{
 		return __at_impl<_Index>::template value(*this);
 	}
 
 	template<size_t _Index>
-	auto at() const -> decltype(__at_const_impl<_Index>::template value(decl<tuple<_FirstType, _RestTypes...> >::ref()))
+	auto at() const noexcept -> decltype(__at_const_impl<_Index>::template value(decl<tuple<_FirstType, _RestTypes...> >::ref()))
 	{
 		return __at_const_impl<_Index>::template value(*this);
 	}
 
 	template<typename _FuncType, size_t ..._Indexes>
-	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& c, type_pack<_size_t<_Indexes> ...>) const -> decltype(
+	__attribute__((always_inline)) inline auto __call_impl(_FuncType&& c, type_pack<_size_t<_Indexes> ...>) const
+			noexcept(
+			noexcept(c(decl<tuple<_RestTypes...> >::ref().template at<_Indexes>()...))
+			)
+	-> decltype(
 			c(decl<tuple<_RestTypes...> >::ref().template at<_Indexes>()...)
 	)
 	{
@@ -75,7 +82,11 @@ struct tuple<_FirstType, _RestTypes...> : __tuple_impl_base
 	 * @brief 将元组的成员作为参数传递给目标函数
 	 */
 	template<typename _FuncType>
-	__attribute__((always_inline)) inline auto call(_FuncType&& c) const -> decltype(
+	__attribute__((always_inline)) inline auto call(_FuncType&& c) const
+			noexcept(
+			noexcept(__call_impl(forward<_FuncType>(c), typename index_sequence<size_t, 0, size>::type()))
+			)
+	-> decltype(
 			__call_impl(forward<_FuncType>(c), typename index_sequence<size_t, 0, size>::type())
 	)
 	{
@@ -87,7 +98,7 @@ template<size_t _Index>
 struct __tuple_impl_base::__at_impl
 {
 	template<typename _AtFirst, typename ... _AtRest>
-	static auto value(tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_impl<_Index - 1>::template value(t.back_elems))
+	static auto value(tuple<_AtFirst, _AtRest...>& t) noexcept -> decltype(__at_impl<_Index - 1>::template value(t.back_elems))
 	{
 		return __at_impl<_Index - 1>::template value(t.back_elems);
 	}
@@ -100,7 +111,7 @@ template<>
 struct __tuple_impl_base::__at_impl<0>
 {
 	template<typename _AtFirst, typename ... _AtRest>
-	static _AtFirst& value(tuple<_AtFirst, _AtRest...>& t)
+	static _AtFirst& value(tuple<_AtFirst, _AtRest...>& t) noexcept
 	{
 		return t.front_elem;
 	}
@@ -110,7 +121,7 @@ template<size_t _Index>
 struct __tuple_impl_base::__at_const_impl
 {
 	template<typename _AtFirst, typename ... _AtRest>
-	static auto value(const tuple<_AtFirst, _AtRest...>& t) -> decltype(__at_const_impl<_Index - 1>::template value(t.back_elems))
+	static auto value(const tuple<_AtFirst, _AtRest...>& t) noexcept -> decltype(__at_const_impl<_Index - 1>::template value(t.back_elems))
 	{
 		return __at_const_impl<_Index - 1>::template value(t.back_elems);
 	}
@@ -120,7 +131,7 @@ template<>
 struct __tuple_impl_base::__at_const_impl<0>
 {
 	template<typename _AtFirst, typename ... _AtRest>
-	static const _AtFirst& value(const tuple<_AtFirst, _AtRest...>& t)
+	static const _AtFirst& value(const tuple<_AtFirst, _AtRest...>& t) noexcept
 	{
 		return t.front_elem;
 	}

@@ -41,22 +41,24 @@ struct __pmemb_identifier
 	template<typename _pMemb, _pMemb _pMembValue>\
 	struct __pmemb_initializer_struct__(pmemb_id)\
 	{\
-		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification)\
+		inline constexpr __def_friend_inject_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification) noexcept\
 		{\
 			return ::tplmp::classify_type_of_t<_pMemb>::value;\
 		}\
-		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<__entity_val__(class_name)>), __pmemb_univptr_t)\
+		inline constexpr __def_friend_inject_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<__entity_val__(class_name)>), __pmemb_univptr_t) noexcept\
 		{\
 			return _pMembValue;\
 		}\
-		__def_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(_pMemb), __memb_ptr)\
+		inline constexpr __def_friend_inject_tag_dispatch__(__entity__(pmemb_id), __entity__(_pMemb), __memb_ptr) noexcept\
 		{\
 			return _pMembValue;\
 		}\
 	};\
 	template class __pmemb_initializer_struct__(pmemb_id)<__entity_val__(pmemb_type), (__entity_val__(pmemb_type))&__entity_val__(class_name)::__entity_val__(memb_name)>;\
-	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification)\
-	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<typename pmemb_id::decl_class>), __pmemb_univptr_t)
+	inline constexpr __decl_friend_inject_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification) noexcept;\
+	__def_friend_inject_tag_dispatch_wrapper__(1, __entity__(pmemb_id), __entity__(::tplmp::classify_type), __pmemb_classification)\
+	inline constexpr __decl_friend_inject_tag_dispatch__(__entity__(pmemb_id), __entity__(::tplmp::univptr_t<typename pmemb_id::decl_class>), __pmemb_univptr_t) noexcept;\
+	__def_friend_inject_tag_dispatch_wrapper__(1, __entity__(pmemb_id), __entity__(::tplmp::univptr_t<typename pmemb_id::decl_class>), __pmemb_univptr_t)
 
 #define __decl_pmemb__(pmemb_id, class_name, memb_name, decl_type)\
 	__decl_pmemb_intl__(pmemb_id, class_name, memb_name, __entity__(typename ::tplmp::ptr_type<__entity_val__(class_name), __entity_val__(decl_type)>::type))
@@ -69,7 +71,8 @@ struct __pmemb_identifier
  * 		  __decl_memb_ptr_intl__()与__decl_pmemb__()必须在同一命名空间下。
  */
 #define __decl_memb_ptr_intl__(pmemb_id, memb_type)\
-	__decl_friend_inject_constexpr_tag_dispatch__(__entity__(pmemb_id), memb_type, __memb_ptr)
+	inline constexpr __decl_friend_inject_tag_dispatch__(__entity__(pmemb_id), memb_type, __memb_ptr) noexcept;\
+	__def_friend_inject_tag_dispatch_wrapper__(1, __entity__(pmemb_id), memb_type, __memb_ptr)
 
 #define __decl_memb_ptr__(pmemb_id, decl_type)\
 	__decl_memb_ptr_intl__(pmemb_id, __entity__(typename ::tplmp::ptr_type<typename pmemb_id::decl_class, __entity_val__(decl_type)>::type))
@@ -121,12 +124,12 @@ private:
 
 		decl_class* pobj;
 
-		__accessor_base(decl_class* pobj)
+		__accessor_base(decl_class* pobj) noexcept
 		{
 			this->pobj = pobj;
 		}
 
-		__accessor_base(decl_class& obj)
+		__accessor_base(decl_class& obj) noexcept
 		{
 			pobj = &obj;
 		}
@@ -151,52 +154,52 @@ protected:
 
 		static pmemb_type pmemb;
 
-		__attribute__((always_inline)) inline field_accessor(decl_class* pobj) :
+		__attribute__((always_inline)) inline field_accessor(decl_class* pobj) noexcept :
 				base(pobj)
 		{
 		}
 
-		__attribute__((always_inline)) inline field_accessor(decl_class& obj) :
+		__attribute__((always_inline)) inline field_accessor(decl_class& obj) noexcept :
 				base(obj)
 		{
 		}
 
-		__attribute__((always_inline)) inline operator eval_type&()
+		__attribute__((always_inline)) inline operator eval_type&() noexcept
 		{
 			return pobj->*pmemb;
 		}
 
-		__attribute__((always_inline)) inline operator const eval_type&() const
+		__attribute__((always_inline)) inline operator const eval_type&() const noexcept
 		{
 			return pobj->*pmemb;
 		}
 
-		__attribute__((always_inline)) inline static eval_type& load(decl_class* pobj)
+		__attribute__((always_inline)) inline static eval_type& load(decl_class* pobj) noexcept
 		{
 			return pobj->*pmemb;
 		}
 
-		__attribute__((always_inline)) inline static const eval_type& load(const decl_class* pobj)
+		__attribute__((always_inline)) inline static const eval_type& load(const decl_class* pobj) noexcept
 		{
 			return pobj->*pmemb;
 		}
 
-		__attribute__((always_inline)) inline static eval_type& load(decl_class& obj)
+		__attribute__((always_inline)) inline static eval_type& load(decl_class& obj) noexcept
 		{
 			return obj.*pmemb;
 		}
 
-		__attribute__((always_inline)) inline static const eval_type& load(const decl_class& obj)
+		__attribute__((always_inline)) inline static const eval_type& load(const decl_class& obj) noexcept
 		{
 			return obj.*pmemb;
 		}
 
-		__attribute__((always_inline)) inline static void store(decl_class* pobj, const eval_type& value)
+		__attribute__((always_inline)) inline static void store(decl_class* pobj, const eval_type& value) noexcept(noexcept(pobj->*pmemb = value))
 		{
 			pobj->*pmemb = value;
 		}
 
-		__attribute__((always_inline)) inline static void store(decl_class& obj, const eval_type& value)
+		__attribute__((always_inline)) inline static void store(decl_class& obj, const eval_type& value) noexcept(noexcept(pobj.*pmemb = value))
 		{
 			obj.*pmemb = value;
 		}
@@ -218,24 +221,28 @@ protected:
 
 		static pmemb_type pmemb;
 
-		__attribute__((always_inline)) inline function_accessor(decl_class* pobj) :
+		__attribute__((always_inline)) inline function_accessor(decl_class* pobj) noexcept :
 				base(pobj)
 		{
 		}
 
-		__attribute__((always_inline)) inline function_accessor(decl_class& obj) :
+		__attribute__((always_inline)) inline function_accessor(decl_class& obj) noexcept :
 				base(obj)
 		{
 		}
 
 		template<typename ..._ArgTypes>
-		__attribute__((always_inline)) inline static auto call(decl_class* pobj, _ArgTypes&& ... args) -> decltype((pobj->*pmemb)(forward<_ArgTypes>(args)...))
+		__attribute__((always_inline)) inline static auto call(decl_class* pobj, _ArgTypes&& ... args)
+				noexcept(noexcept((pobj->*pmemb)(forward<_ArgTypes>(args)...)))
+		-> decltype((pobj->*pmemb)(forward<_ArgTypes>(args)...))
 		{
 			return (pobj->*pmemb)(forward<_ArgTypes>(args)...);
 		}
 
 		template<typename ..._ArgTypes>
-		__attribute__((always_inline)) inline static auto call(decl_class& obj, _ArgTypes&& ... args) -> decltype((obj.*pmemb)(forward<_ArgTypes>(args)...))
+		__attribute__((always_inline)) inline static auto call(decl_class& obj, _ArgTypes&& ... args)
+				noexcept(noexcept((obj.*pmemb)(forward<_ArgTypes>(args)...)))
+		-> decltype((obj.*pmemb)(forward<_ArgTypes>(args)...))
 		{
 			return (obj.*pmemb)(forward<_ArgTypes>(args)...);
 		}
@@ -272,17 +279,17 @@ struct __accessor_impl<_AccessIdentifier, tplmp::classify_type::classify_type_me
 	using typename base::decl_class;
 	using base::pobj;
 
-	__accessor_impl(decl_class* pobj) :
+	__accessor_impl(decl_class* pobj) noexcept :
 			base(pobj)
 	{
 	}
 
-	__accessor_impl(decl_class& obj) :
+	__accessor_impl(decl_class& obj) noexcept :
 			base(obj)
 	{
 	}
 
-	__attribute__((always_inline)) inline type& operator=(const eval_type& value)
+	__attribute__((always_inline)) inline type& operator=(const eval_type& value) noexcept(noexcept(base::store(pobj, value)))
 	{
 		base::store(pobj, value);
 		return *this;
@@ -303,18 +310,20 @@ struct __accessor_impl<_AccessIdentifier, tplmp::classify_type::classify_type_me
 	using typename base::decl_class;
 	using base::pobj;
 
-	__accessor_impl(decl_class* pobj) :
+	__accessor_impl(decl_class* pobj) noexcept :
 			base(pobj)
 	{
 	}
 
-	__accessor_impl(decl_class& obj) :
+	__accessor_impl(decl_class& obj) noexcept :
 			base(obj)
 	{
 	}
 
 	template<typename ..._ArgTypes>
-	__attribute__((always_inline)) inline auto operator()(_ArgTypes&& ... args) -> decltype(base::call(pobj, forward<_ArgTypes>(args)...))
+	__attribute__((always_inline)) inline auto operator()(_ArgTypes&& ... args)
+			noexcept(noexcept(base::call(pobj, forward<_ArgTypes>(args)...)))
+	-> decltype(base::call(pobj, forward<_ArgTypes>(args)...))
 	{
 		return base::call(pobj, forward<_ArgTypes>(args)...);
 	}

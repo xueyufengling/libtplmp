@@ -23,13 +23,13 @@ protected:
 
 	public:
 		template<typename _T>
-		inline void store(_T* pvar)
+		inline void store(_T* pvar) noexcept
 		{
 			variable = pvar;
 		}
 
 		template<typename _RetType, typename ... _ArgTypes>
-		inline void store(_RetType (*pfunc)(_ArgTypes...))
+		inline void store(_RetType (*pfunc)(_ArgTypes...)) noexcept
 		{
 			function = (void (*)())pfunc;
 		}
@@ -39,7 +39,7 @@ protected:
 		{
 			typedef typename tplmp::ptr_type<void, _T>::type type;
 
-			inline static constexpr type cast(__univptr_orid pord)
+			inline static constexpr type cast(__univptr_orid pord) noexcept
 			{
 				return (type)pord.variable;
 			}
@@ -51,7 +51,7 @@ protected:
 		{
 			typedef typename tplmp::ptr_type<void, _RetType(_ArgTypes...)>::type type;
 
-			inline static constexpr type cast(__univptr_orid pord)
+			inline static constexpr type cast(__univptr_orid pord) noexcept
 			{
 				return (type)pord.function;
 			}
@@ -60,25 +60,25 @@ protected:
 		__univptr_orid() = default;
 
 		template<typename _T>
-		inline __univptr_orid(_T* pord)
+		inline __univptr_orid(_T* pord) noexcept
 		{
 			store(pord);
 		}
 
 		template<typename _T>
-		inline constexpr typename tplmp::ptr_type<void, _T>::type cast()
+		inline constexpr typename tplmp::ptr_type<void, _T>::type cast() noexcept
 		{
 			return __cast_impl<_T>::cast(*this);
 		}
 
 		template<typename _T>
-		inline constexpr operator typename tplmp::ptr_type<void, _T>::type()
+		inline constexpr operator typename tplmp::ptr_type<void, _T>::type() noexcept
 		{
 			return cast<_T>();
 		}
 
 		template<typename _T>
-		inline __univptr_orid& operator=(_T* pord)
+		inline __univptr_orid& operator=(_T* pord) noexcept
 		{
 			store(pord);
 			return *this;
@@ -104,13 +104,13 @@ protected:
 
 	public:
 		template<typename _T>
-		inline void store(_T _Class::*pfield)
+		inline void store(_T _Class::*pfield) noexcept
 		{
 			field = (int _Class::*)pfield;
 		}
 
 		template<typename _RetType, typename ... _ArgTypes>
-		inline void store(_RetType (_Class::*pfunc)(_ArgTypes...))
+		inline void store(_RetType (_Class::*pfunc)(_ArgTypes...)) noexcept
 		{
 			function = (void (_Class::*)())pfunc;
 		}
@@ -120,7 +120,7 @@ protected:
 		{
 			typedef typename tplmp::ptr_type<_Class, _T>::type type;
 
-			inline static constexpr type cast(__univptr_memb <_Class> pmemb)
+			inline static constexpr type cast(__univptr_memb <_Class> pmemb) noexcept
 			{
 				return (type)pmemb.field;
 			}
@@ -132,7 +132,7 @@ protected:
 		{
 			typedef typename tplmp::ptr_type<_Class, _RetType(_ArgTypes...)>::type type;
 
-			inline static constexpr type cast(__univptr_memb <_Class> pmemb)
+			inline static constexpr type cast(__univptr_memb <_Class> pmemb) noexcept
 			{
 				return (type)pmemb.function;
 			}
@@ -141,25 +141,25 @@ protected:
 		__univptr_memb() = default;
 
 		template<typename _T>
-		inline __univptr_memb(_T _Class::*pmemb)
+		inline __univptr_memb(_T _Class::*pmemb) noexcept
 		{
 			store(pmemb);
 		}
 
 		template<typename _T>
-		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast() const
+		inline constexpr typename tplmp::ptr_type<_Class, _T>::type cast() const noexcept
 		{
 			return __cast_impl<_T>::cast(*this);
 		}
 
 		template<typename _T>
-		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type() const
+		inline constexpr operator typename tplmp::ptr_type<_Class, _T>::type() const noexcept
 		{
 			return cast();
 		}
 
 		template<typename _T>
-		inline __univptr_memb <_Class>& operator=(_T _Class::*pmemb)
+		inline __univptr_memb <_Class>& operator=(_T _Class::*pmemb) noexcept
 		{
 			store(pmemb);
 			return *this;
@@ -187,20 +187,20 @@ struct univptr_t: __univptr_impl_base
 	univptr_t() = default;
 
 	template<typename _T>
-	inline univptr_t(_T* pord)
+	inline univptr_t(_T* pord) noexcept
 	{
 		orid_ptr = pord;
 	}
 
 	template<typename _T>
-	inline univptr_t(_T _Class::*pmemb)
+	inline univptr_t(_T _Class::*pmemb) noexcept
 	{
 		memb_ptr = pmemb;
 	}
 
 	template<typename _T>
 	inline constexpr
-	typename tplmp::ptr_type<_Class, _T>::type cast() const
+	typename tplmp::ptr_type<_Class, _T>::type cast() const noexcept
 	{
 		return if_else<type_equal<_Class, void>::value>
 		::_return(orid_ptr.template cast<_T>(),
@@ -209,26 +209,26 @@ struct univptr_t: __univptr_impl_base
 
 	//当_Class为非void时才允许转换为类成员指针
 	template<typename _T, typename = typename if_else<!type_equal<_Class, void>::value && !type_equal<_T, void>::value>::def<> >
-	inline constexpr operator _T _Class::*() const
+	inline constexpr operator _T _Class::*() const noexcept
 	{
 		return memb_ptr.template cast<_T>();
 	}
 
 	template<typename _T>
-	inline constexpr operator _T*() const
+	inline constexpr operator _T*() const noexcept
 	{
 		return orid_ptr.template cast<_T>();
 	}
 
 	template<typename _T>
-	inline univptr_t<_Class>& operator=(_T* pord)
+	inline univptr_t<_Class>& operator=(_T* pord) noexcept
 	{
 		orid_ptr.store(pord);
 		return *this;
 	}
 
 	template<typename _T>
-	inline univptr_t<_Class>& operator=(_T _Class::*pmemb)
+	inline univptr_t<_Class>& operator=(_T _Class::*pmemb) noexcept
 	{
 		memb_ptr.store(pmemb);
 		return *this;

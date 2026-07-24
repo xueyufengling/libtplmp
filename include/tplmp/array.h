@@ -11,7 +11,7 @@ namespace tplmp
  */
 //@formatter:off
 template<size_t _Length, typename _T, size_t _Size>
-inline constexpr _T (& slice(_T (&arr)[_Size], size_t begin))[_Length]
+inline constexpr _T (& slice(_T (&arr)[_Size], size_t begin) noexcept)[_Length]
 {
 	static_assert(_Length >= 0 && _Length <= _Size, "invalid slice size");
 	return (_T (&)[_Length])*(((_T*)&arr) + begin);
@@ -22,7 +22,7 @@ size_t _Index,
 typename _FirstType, typename ..._RestTypes>
 struct __at_impl
 {
-	inline static auto value(_FirstType first, _RestTypes ...rest) -> decltype(__at_impl<_Index, _RestTypes...>::value(rest...))
+	inline static auto value(_FirstType first, _RestTypes ...rest) noexcept -> decltype(__at_impl<_Index, _RestTypes...>::value(rest...))
 	{
 		return __at_impl<_Index, _RestTypes...>::value(rest...);
 	}
@@ -31,7 +31,7 @@ struct __at_impl
 template<typename _FirstType, typename ..._RestTypes>
 struct __at_impl<0, _FirstType, _RestTypes...>
 {
-	inline static _FirstType value(_FirstType first, _RestTypes ...rest)
+	inline static _FirstType value(_FirstType first, _RestTypes ...rest) noexcept
 	{
 		return first;
 	}
@@ -41,7 +41,7 @@ struct __at_impl<0, _FirstType, _RestTypes...>
  * @brief 模板变长实参包取值
  */
 template<size_t _Index, typename ... _ParamTypes>
-inline auto at(_ParamTypes ...params) -> decltype(__at_impl<_Index, _ParamTypes...>::value(params...))
+inline auto at(_ParamTypes ...params) noexcept -> decltype(__at_impl<_Index, _ParamTypes...>::value(params...))
 {
 	return __at_impl<_Index, _ParamTypes...>::value(params...);
 }
@@ -55,17 +55,17 @@ inline auto at(_ParamTypes ...params) -> decltype(__at_impl<_Index, _ParamTypes.
  */
 #define __def_array_assign__(size, type, indexes_tp, param_types, array_init_name, init_expr, params)\
 template<size_t size, typename type, size_t ...indexes_tp, typename ...param_types>\
-inline void __##array_init_name##_fetch_impl(type (&arr)[size], tplmp::size_t_sequence<indexes_tp ...>, param_types... params)\
+inline void __##array_init_name##_fetch_impl(type (&arr)[size], tplmp::size_t_sequence<indexes_tp ...>, param_types... params) noexcept\
 {\
 	__eval_array_assign_expr__(__expr_eval, arr, indexes_tp, init_expr)\
 }\
 template<size_t size, typename type, size_t ...indexes_tp>\
-inline void __##array_init_name##_fill_impl(type (&arr)[size], tplmp::size_t_sequence<indexes_tp ...>, type default_val)\
+inline void __##array_init_name##_fill_impl(type (&arr)[size], tplmp::size_t_sequence<indexes_tp ...>, type default_val) noexcept\
 {\
 	__eval_array_assign_expr__(__expr_eval, arr, indexes_tp, default_val)\
 }\
 template<size_t size, typename type, typename ...param_types>\
-inline void array_init_name(type (&arr)[size], param_types... params)\
+inline void array_init_name(type (&arr)[size], param_types... params) noexcept\
 {\
 	constexpr size_t pass_val_num = sizeof...(param_types);\
 	__##array_init_name##_fetch_impl(arr, tplmp::index_sequence_t<size_t, 0, pass_val_num>(), params...);\

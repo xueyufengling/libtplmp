@@ -76,12 +76,12 @@ struct __conversion_placeholder
 	 * 1. 当_T1 = _T2时，两个operator转换函数不会导致重定义
 	 * 2. const对象调用优先级更高
 	 */
-	inline operator _T1&() const
+	inline operator _T1&() const noexcept
 	{
 		return decl<_T1>::ref();
 	}
 
-	inline operator _T1*() const
+	inline operator _T1*() const noexcept
 	{
 		return decl<_T1>::ptr();
 	}
@@ -90,12 +90,12 @@ struct __conversion_placeholder
 	 * operator _T2&(__conversion_placeholder* this)，this为隐藏参数
 	 * 非const对象调用优先级更高
 	 */
-	inline operator _T2&()
+	inline operator _T2&() noexcept
 	{
 		return decl<_T2>::ref();
 	}
 
-	inline operator _T2*()
+	inline operator _T2*() noexcept
 	{
 		return decl<_T2>::ptr();
 	}
@@ -219,12 +219,12 @@ struct is_assignable
 			{\
 			};\
 			template<typename _Dummy>\
-			inline static constexpr bool __check(decltype(&_Dummy::memb_name))\
+			inline static constexpr bool __check(decltype(&_Dummy::memb_name)) noexcept\
 			{\
 				return false;\
 			}\
 			template<typename _Dummy>\
-			inline static constexpr bool __check(...)\
+			inline static constexpr bool __check(...) noexcept\
 			{\
 				return true;\
 			}\
@@ -250,11 +250,11 @@ struct is_assignable
 		private:\
 			check_name() = delete;\
 			template<typename _DeducedClass = _Class, _T _DeducedClass::*_pMemb = &_DeducedClass::memb_name>\
-			static constexpr bool __check(int)\
+			static constexpr bool __check(int) noexcept\
 			{\
 				return true;\
 			}\
-			static constexpr bool __check(...)\
+			static constexpr bool __check(...) noexcept\
 			{\
 				return false;\
 			}\

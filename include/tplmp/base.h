@@ -57,7 +57,7 @@ public:
 template<size_t = 0>
 struct empty
 {
-	inline empty(...)
+	inline empty(...) noexcept
 	{
 	}
 };
@@ -141,7 +141,7 @@ struct variable
 
 	variable() = default;
 
-	variable(const _T& value) :
+	variable(const _T& value) noexcept(noexcept(_T(value))) :
 			value(value)
 	{
 	}
@@ -384,10 +384,14 @@ protected:
 		 * @brief 返回一个占位符值，可以赋值、传值，但不能访问
 		 * 		  此函数不是constexpr，编译时如果对nullptr解引用会抛出编译错误。但此函数仍可在编译时在给static const变量赋值表达式中使用
 		 */
-		static type& ref() noexcept
+		inline static constexpr type& ref() noexcept
 		{
-			static type* _nullptr = ptr();
-			return *_nullptr;
+			return *ptr();
+		}
+
+		inline static constexpr const type& const_ref() noexcept
+		{
+			return *ptr();
 		}
 	};
 };
@@ -594,40 +598,40 @@ struct classify_type_of_t<_RetType (_Class::*)(_ArgTypes...)>
 };
 
 template<typename _T>
-inline constexpr classify_type classify_type_of(_T*)
+inline constexpr classify_type classify_type_of(_T*) noexcept
 {
 	return classify_type::classify_type_variable;
 }
 
 template<typename _RetType, typename ... _ArgTypes>
-inline constexpr classify_type classify_type_of(_RetType (*)(_ArgTypes...))
+inline constexpr classify_type classify_type_of(_RetType (*)(_ArgTypes...)) noexcept
 {
 	return classify_type::classify_type_function;
 }
 
 template<typename _Class, typename _T>
-inline constexpr classify_type classify_type_of(_T _Class::*)
+inline constexpr classify_type classify_type_of(_T _Class::*) noexcept
 {
 	return classify_type::classify_type_memb_field;
 }
 
 template<typename _Class, typename _RetType, typename ... _ArgTypes>
-inline constexpr classify_type classify_type_of(_RetType (_Class::*)(_ArgTypes...))
+inline constexpr classify_type classify_type_of(_RetType (_Class::*)(_ArgTypes...)) noexcept
 {
 	return classify_type::classify_type_memb_function;
 }
 
-inline constexpr classify_type to_orid_classification(classify_type classification)
+inline constexpr classify_type to_orid_classification(classify_type classification) noexcept
 {
 	return classification > classify_type::classify_type_orid_num ? (classify_type)(classification - classify_type::classify_type_orid_num) : classification;
 }
 
-inline constexpr classify_type to_memb_classification(classify_type classification)
+inline constexpr classify_type to_memb_classification(classify_type classification) noexcept
 {
 	return classification < classify_type::classify_type_orid_num ? (classify_type)(classification + classify_type::classify_type_orid_num) : classification;
 }
 
-inline constexpr bool is_memb_classification(classify_type classification)
+inline constexpr bool is_memb_classification(classify_type classification) noexcept
 {
 	return classification == classify_type::classify_type_memb_field || classification == classify_type::classify_type_memb_function;
 }

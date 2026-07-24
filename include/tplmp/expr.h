@@ -30,7 +30,7 @@ struct expr
 	 */
 	tuple<_OperandTypes...> operands;
 
-	inline expr(_OperandTypes&& ... ops) :
+	inline expr(_OperandTypes&& ... ops) noexcept(noexcept(tuple<_OperandTypes...>(forward<_OperandTypes>(ops) ...))) :
 			operands(forward<_OperandTypes>(ops) ...)
 	{
 	}
@@ -38,12 +38,13 @@ struct expr
 protected:
 	template<size_t ..._OperandIndexes>
 	inline constexpr _T __value_impl(type_pack<_size_t<_OperandIndexes> ...>)
+			noexcept(noexcept(_Op::eval(((_T)operands.template at<_OperandIndexes>().value()) ...)))
 	{
 		return _Op::eval(((_T)operands.template at<_OperandIndexes>().value()) ...);
 	}
 
 public:
-	inline constexpr expr<_T> value()
+	inline constexpr expr<_T> value() noexcept
 	{
 		return __value_impl(index_sequence_t<size_t, 0, sizeof...(_OperandTypes)>());
 	}
@@ -56,7 +57,7 @@ struct expr<_T, _T>
 
 	_T operand;
 
-	inline expr(_T op) :
+	inline expr(_T op) noexcept(noexcept(_T(op))) :
 			operand(op)
 	{
 	}
@@ -66,17 +67,17 @@ struct expr<_T, _T>
 	 * 仅在表达式操作类型_Op与_T相同时才能直接转换。
 	 * 对于无操作数的操作类型，例如取反、取共轭，其_Op是对应的操作类如_inv、_conj，而非_T
 	 */
-	inline constexpr operator _T&()
+	inline constexpr operator _T&() noexcept
 	{
 		return operand;
 	}
 
-	inline constexpr operator const _T&() const
+	inline constexpr operator const _T&() const noexcept
 	{
 		return operand;
 	}
 
-	inline constexpr _T& value()
+	inline constexpr _T& value() noexcept
 	{
 		return operand;
 	}
